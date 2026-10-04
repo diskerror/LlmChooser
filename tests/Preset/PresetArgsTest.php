@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace LLMchooser\Tests\Preset;
 
 use LLMchooser\Preset\PresetArgs;

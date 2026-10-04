@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace LLMchooser\Tests\Engine;
 
 use LLMchooser\Engine\Engine;
@@ -34,8 +36,7 @@ class EngineRepositoryTest extends TestCase
             'id'                  => 'test-engine',
             'name'                => 'Test Engine',
             'binary_path_default' => '/opt/llama.cpp/build/bin/llama-server',
-            'port_range_start'    => 6000,
-            'port_range_end'      => 6100,
+            'port_range'          => ['min' => 6000, 'max' => 6100],
         ]);
         $repo->save($engine);
 
@@ -44,8 +45,8 @@ class EngineRepositoryTest extends TestCase
         $this->assertSame('Test Engine', $loaded->name);
         $this->assertSame('/opt/llama.cpp/build/bin/llama-server', $loaded->binary_path_default);
         $this->assertSame('127.0.0.1', $loaded->host); // default survived
-        $this->assertSame(6000, $loaded->port_range_start);
-        $this->assertSame(6100, $loaded->port_range_end);
+        $this->assertSame(6000, $loaded->port_range->min);
+        $this->assertSame(6100, $loaded->port_range->max);
     }
 
     public function test_loadall_returns_collection(): void
@@ -83,7 +84,7 @@ class EngineRepositoryTest extends TestCase
         $this->assertSame('Beelink Local', $engine->name);
         $this->assertSame('/opt/llama.cpp-ngrams/build/bin/llama-server', $engine->binary_path_default);
         $this->assertSame('127.0.0.1', $engine->host);
-        $this->assertSame(5800, $engine->port_range_start);
-        $this->assertSame(5900, $engine->port_range_end);
+        $this->assertSame(5800, $engine->port_range->min);
+        $this->assertSame(5900, $engine->port_range->max);
     }
 }

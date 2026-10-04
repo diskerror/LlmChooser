@@ -3,6 +3,8 @@
     "name": "Beelink Local",
     "binary_path_default": "/opt/llama.cpp-ngrams/build/bin/llama-server",
     "host": "127.0.0.1",
-    "port_range_start": 5800,
-    "port_range_end": 5900
+    "port_range": {
+        "min": 5800,
+        "max": 5900
+    }
 }

@@ -1,18 +1,20 @@
 <?php
 
+declare(strict_types=1);
+
 namespace LLMchooser\Preset;
 
 use Diskerror\Typed\TypedClass;
 
 class Preset extends TypedClass
 {
-	public string  $id               = '';
-	public string  $name             = '';
-	public string  $engine_id        = '';
-	public string  $binary_path      = '';
-	public string  $model_path       = '';
-	public ?string $mmproj_path      = null;
-	public ?string $model_draft_path = null;
+	protected string  $id               = '';
+	protected string  $name             = '';
+	protected string  $engine_id        = '';
+	protected string  $binary_path      = '';
+	protected string  $model_path       = '';
+	protected ?string $mmproj_path      = null;
+	protected ?string $model_draft_path = null;
 
 	// protected, NOT public: TypedClass only runs its nested-object coercion
 	// (deep assign of an array into the PresetArgs instance) for non-public
@@ -20,7 +22,7 @@ class Preset extends TypedClass
 	// class's magic __get/__set, so `$preset->args` works either way.
 	protected PresetArgs $args;
 	
-	public int    $ttl_seconds   = 86400;
-	public ?int   $assigned_port = null;
-	public string $notes         = '';
+	protected int    $ttl_seconds   = 86400;
+	protected ?int   $assigned_port = null;
+	protected string $notes         = '';
 }

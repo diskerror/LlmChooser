@@ -1,11 +1,17 @@
 <?php
 
+declare(strict_types=1);
+
 namespace LLMchooser\Engine;
 
+use LLMchooser\Config\BrokenFile;
+use LLMchooser\Config\JsonStore;
 use RuntimeException;
 
 class EngineRepository
 {
+    use JsonStore;
+
     public function __construct(private readonly string $dir)
     {
         if (!is_dir($this->dir)) {
@@ -21,8 +27,7 @@ class EngineRepository
         if (!is_file($path)) {
             throw new RuntimeException("Engine not found: {$id}");
         }
-        $data = json_decode(file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
-        return new Engine($data);
+        return new Engine($this->readJson($path));
     }
 
     public function save(Engine $engine): void
@@ -31,7 +36,7 @@ class EngineRepository
             throw new RuntimeException('Engine must have a non-empty id before saving.');
         }
         $json = json_encode($engine, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
-        file_put_contents($this->pathFor($engine->id), $json);
+        $this->writeJsonIfChanged($this->pathFor($engine->id), $json);
     }
 
     public function delete(string $id): void
@@ -45,8 +50,7 @@ class EngineRepository
     public function loadAll(): EngineCollection
     {
         $out = new EngineCollection();
-        foreach (glob($this->dir . '/*.json') as $file) {
-            $data = json_decode(file_get_contents($file), true, 512, JSON_THROW_ON_ERROR);
+        foreach ($this->readAllJson($this->dir) as $data) {
             $engine = new Engine($data);
             $out[$engine->id] = $engine;
         }

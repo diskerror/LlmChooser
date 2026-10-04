@@ -1,11 +1,17 @@
 <?php
 
+declare(strict_types=1);
+
 namespace LLMchooser\Preset;
 
+use LLMchooser\Config\BrokenFile;
+use LLMchooser\Config\JsonStore;
 use RuntimeException;
 
 class PresetRepository
 {
+    use JsonStore;
+
     public function __construct(private readonly string $dir)
     {
         if (!is_dir($this->dir)) {
@@ -21,8 +27,7 @@ class PresetRepository
         if (!is_file($path)) {
             throw new RuntimeException("Preset not found: {$id}");
         }
-        $data = json_decode(file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
-        return new Preset($data);
+        return new Preset($this->readJson($path));
     }
 
     public function save(Preset $preset): void
@@ -31,7 +36,7 @@ class PresetRepository
             throw new RuntimeException('Preset must have a non-empty id before saving.');
         }
         $json = json_encode($preset, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
-        file_put_contents($this->pathFor($preset->id), $json);
+        $this->writeJsonIfChanged($this->pathFor($preset->id), $json);
     }
 
     public function delete(string $id): void
@@ -45,8 +50,7 @@ class PresetRepository
     public function loadAll(): PresetCollection
     {
         $out = new PresetCollection();
-        foreach (glob($this->dir . '/*.json') as $file) {
-            $data = json_decode(file_get_contents($file), true, 512, JSON_THROW_ON_ERROR);
+        foreach ($this->readAllJson($this->dir) as $data) {
             $preset = new Preset($data);
             $out[$preset->id] = $preset;
         }

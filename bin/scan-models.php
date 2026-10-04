@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 // Usage: php84 bin/scan-models.php [root ...]
 // With no roots, uses config/model_roots.json.
 
