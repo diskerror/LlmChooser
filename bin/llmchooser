@@ -1,0 +1,20 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+require __DIR__ . '/../vendor/autoload.php';
+
+use LLMchooser\App;
+use LLMchooser\Cli\Cli;
+use LLMchooser\Cli\Output;
+use LLMchooser\Cli\StartupManager;
+
+if (PHP_VERSION_ID < 80400) {
+	fwrite(STDERR, 'llmchooser needs PHP >= 8.4 (this is ' . PHP_VERSION . ")\n");
+	exit(1);
+}
+
+$app = new App(dirname(__DIR__));
+$out = new Output();
+exit((new Cli($app, $out, new StartupManager($app, $out)))->run(array_slice($argv, 1)));
