@@ -18,4 +18,12 @@ if (PHP_SAPI === 'cli-server') {
 
 $app = new App(dirname(__DIR__));
 $app->processes->reconcile();
-(new WebApp($app))->handle(Request::fromGlobals())->send();
+
+// Request::fromGlobals() must be called only once — it reads php://input.
+$request = Request::fromGlobals();
+if (str_starts_with($request->path, '/v1/')) {
+	set_time_limit(0);
+	(new \LLMchooser\Proxy\ChatProxy($app))->handle($request, new \LLMchooser\Proxy\Emitter());
+	return;
+}
+(new WebApp($app))->handle($request)->send();

@@ -57,6 +57,7 @@ final class WebApp
 		$rt->add('POST', '/presets/{id}/estimate', fn(Request $r, array $p): Response => $this->estimate($p['id']));
 		$rt->add('GET', '/presets/{id}/log', fn(Request $r, array $p): Response => $this->log($r, $p['id']));
 		$rt->add('GET', '/models', fn(Request $r): Response => $this->models($r));
+		$rt->add('GET', '/health', fn(Request $r): Response => Response::json(['status' => 'ok']));
 		$rt->add('GET', '/api/status', fn(Request $r): Response => $this->apiStatus());
 		$rt->add('GET', '/assets/style.css', fn(Request $r): Response => $this->css());
 	}
