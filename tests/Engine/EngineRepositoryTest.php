@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Tests\Engine;
+namespace LlmChooser\Tests\Engine;
 
-use LLMchooser\Engine\Engine;
-use LLMchooser\Engine\EngineCollection;
-use LLMchooser\Engine\EngineRepository;
+use LlmChooser\Engine\Engine;
+use LlmChooser\Engine\EngineCollection;
+use LlmChooser\Engine\EngineRepository;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 

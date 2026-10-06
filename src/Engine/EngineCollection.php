@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Engine;
+namespace LlmChooser\Engine;
 
 use Diskerror\Typed\TypedArray;
 

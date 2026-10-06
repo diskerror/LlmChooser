@@ -7,8 +7,8 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use LLMchooser\Model\ModelRootsConfig;
-use LLMchooser\Model\ModelScanner;
+use LlmChooser\Model\ModelRootsConfig;
+use LlmChooser\Model\ModelScanner;
 
 $projectRoot = dirname(__DIR__);
 $roots       = array_slice($argv, 1);

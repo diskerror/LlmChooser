@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use LLMchooser\App;
-use LLMchooser\Http\Request;
-use LLMchooser\Http\WebApp;
+use LlmChooser\App;
+use LlmChooser\Http\Request;
+use LlmChooser\Http\WebApp;
 
 // Under `php -S` serve existing static files directly.
 if (PHP_SAPI === 'cli-server') {
@@ -23,7 +23,7 @@ $app->processes->reconcile();
 $request = Request::fromGlobals();
 if (str_starts_with($request->path, '/v1/')) {
 	set_time_limit(0);
-	(new \LLMchooser\Proxy\ChatProxy($app))->handle($request, new \LLMchooser\Proxy\Emitter());
+	(new \LlmChooser\Proxy\ChatProxy($app))->handle($request, new \LlmChooser\Proxy\Emitter());
 	return;
 }
 (new WebApp($app))->handle($request)->send();

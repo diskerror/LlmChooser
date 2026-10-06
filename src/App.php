@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser;
+namespace LlmChooser;
 
-use LLMchooser\Engine\EngineRepository;
-use LLMchooser\Memory\LinuxTopologyProbe;
-use LLMchooser\Memory\MemoryService;
-use LLMchooser\Memory\TopologyProbe;
-use LLMchooser\Model\ModelRootsConfig;
-use LLMchooser\Model\ModelScanner;
-use LLMchooser\Preset\PresetRepository;
-use LLMchooser\Process\ProcessManager;
-use LLMchooser\Process\RuntimeState;
+use LlmChooser\Engine\EngineRepository;
+use LlmChooser\Memory\LinuxTopologyProbe;
+use LlmChooser\Memory\MemoryService;
+use LlmChooser\Memory\TopologyProbe;
+use LlmChooser\Model\ModelRootsConfig;
+use LlmChooser\Model\ModelScanner;
+use LlmChooser\Preset\PresetRepository;
+use LlmChooser\Process\ProcessManager;
+use LlmChooser\Process\RuntimeState;
 
 /** Builds the shared services from the project directory layout. */
 final class App

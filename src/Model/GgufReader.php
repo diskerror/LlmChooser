@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Model;
+namespace LlmChooser\Model;
 
 /**
  * Reads only the GGUF header and metadata key/values. Never reads weights.

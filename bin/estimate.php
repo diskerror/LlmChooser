@@ -10,9 +10,9 @@ declare(strict_types=1);
 // throws "Cannot read memory info" — that is expected, run it on beelink.
 require __DIR__ . '/../vendor/autoload.php';
 
-use LLMchooser\Memory\LinuxTopologyProbe;
-use LLMchooser\Memory\MemoryService;
-use LLMchooser\Preset\PresetRepository;
+use LlmChooser\Memory\LinuxTopologyProbe;
+use LlmChooser\Memory\MemoryService;
+use LlmChooser\Preset\PresetRepository;
 
 if (($argv[1] ?? '') === '') {
 	fwrite(STDERR, "usage: php84 bin/estimate.php <preset-id>\n");

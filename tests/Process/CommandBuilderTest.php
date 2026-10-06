@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Tests\Process;
+namespace LlmChooser\Tests\Process;
 
-use LLMchooser\Engine\Engine;
-use LLMchooser\Preset\Preset;
-use LLMchooser\Process\CommandBuilder;
+use LlmChooser\Engine\Engine;
+use LlmChooser\Preset\Preset;
+use LlmChooser\Process\CommandBuilder;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 

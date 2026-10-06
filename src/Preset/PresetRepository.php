@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Preset;
+namespace LlmChooser\Preset;
 
-use LLMchooser\Config\BrokenFile;
-use LLMchooser\Config\JsonStore;
+use LlmChooser\Config\BrokenFile;
+use LlmChooser\Config\JsonStore;
 use RuntimeException;
 
 class PresetRepository

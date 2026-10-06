@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Tests\Cli;
+namespace LlmChooser\Tests\Cli;
 
-use LLMchooser\Cli\CommandRunner;
+use LlmChooser\Cli\CommandRunner;
 
 /**
  * Records every command instead of running it, so the systemd feature is

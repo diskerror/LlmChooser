@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Tests\Proxy;
+namespace LlmChooser\Tests\Proxy;
 
-use LLMchooser\Proxy\Emitter;
+use LlmChooser\Proxy\Emitter;
 
 final class CollectingEmitter extends Emitter
 {

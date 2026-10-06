@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Http;
+namespace LlmChooser\Http;
 
 /**
  * Widget choices the PHP types alone cannot express. Lists come from

@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Tests\Memory;
+namespace LlmChooser\Tests\Memory;
 
-use LLMchooser\Memory\Device;
-use LLMchooser\Memory\FixedTopologyProbe;
-use LLMchooser\Memory\MemoryService;
-use LLMchooser\Memory\MemoryTopology;
-use LLMchooser\Model\GgufReader;
-use LLMchooser\Preset\Preset;
-use LLMchooser\Tests\Model\GgufFixture;
+use LlmChooser\Memory\Device;
+use LlmChooser\Memory\FixedTopologyProbe;
+use LlmChooser\Memory\MemoryService;
+use LlmChooser\Memory\MemoryTopology;
+use LlmChooser\Model\GgufReader;
+use LlmChooser\Preset\Preset;
+use LlmChooser\Tests\Model\GgufFixture;
 use PHPUnit\Framework\TestCase;
 
 class MemoryServiceTest extends TestCase

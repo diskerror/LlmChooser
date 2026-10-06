@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Tests\Preset;
+namespace LlmChooser\Tests\Preset;
 
-use LLMchooser\Preset\PresetArgs;
+use LlmChooser\Preset\PresetArgs;
 use PHPUnit\Framework\TestCase;
 
 class PresetArgsTest extends TestCase

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Tests\Model;
+namespace LlmChooser\Tests\Model;
 
-use LLMchooser\Model\ModelEntry;
-use LLMchooser\Model\ModelScanner;
+use LlmChooser\Model\ModelEntry;
+use LlmChooser\Model\ModelScanner;
 use PHPUnit\Framework\TestCase;
 
 class ModelScannerTest extends TestCase

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Process;
+namespace LlmChooser\Process;
 
 /** Thin wrapper around `kill` and `ps` so it works without the posix extension. */
 class ProcessControl

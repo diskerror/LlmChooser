@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Cli;
+namespace LlmChooser\Cli;
 
 /** Runs a system command. Replaced by a fake in tests. */
 class CommandRunner

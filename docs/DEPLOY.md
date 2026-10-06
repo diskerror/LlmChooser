@@ -1,4 +1,4 @@
-# Deploying LLMchooser to beelink
+# Deploying LlmChooser to beelink
 
 Verified on beelink, 2026-10-03: PHP 8.4.26 with `curl`, `intl`, `pcntl`,
 `posix`; `/usr/bin/systemctl` present; user `llama` exists (uid 988, in
@@ -24,10 +24,10 @@ Run CLI commands as the llama user so file ownership stays consistent:
 be run directly. It refuses to start under PHP < 8.4.
 
 Engine binary: config/engines/beelink-local.json points at
-/opt/llama.cpp-ngrams/build/bin/llama-server. LLMchooser sets
+/opt/llama.cpp-ngrams/build/bin/llama-server. LlmChooser sets
 LD_LIBRARY_PATH to that binary's directory automatically.
 
-Ports: LLMchooser uses 5800–5900 for instances. llama-swap stays on
+Ports: LlmChooser uses 5800–5900 for instances. llama-swap stays on
 1234 until the Phase 7 cutover.
 
 ## Starting a preset at boot
@@ -56,7 +56,7 @@ the built-in server enough workers for the concurrent chats you expect.
 `/etc/systemd/system/llmchooser-web.service`
 
     [Unit]
-    Description=LLMchooser web UI and /v1 proxy
+    Description=LlmChooser web UI and /v1 proxy
     After=network-online.target
     Wants=network-online.target
 
@@ -83,7 +83,7 @@ Later, nginx + php-fpm can replace `php -S` without code changes
 
 ## Cutover from llama-swap (manual)
 
-1. Run LLMchooser web on :8090 next to llama-swap on :1234. Create
+1. Run LlmChooser web on :8090 next to llama-swap on :1234. Create
    presets matching the llama-swap models (command lines are in
    `/etc/llama-swap/config.yaml`). The qwen3.8-flash-next-q5-ngrams preset
    needs binary `/opt/llama.cpp-ngrams/build/bin/llama-server`, mmproj and
@@ -95,9 +95,9 @@ Later, nginx + php-fpm can replace `php -S` without code changes
 3. Point ONE client (e.g. a Hermes test profile) at
    `http://beelink:8090/v1` and use it for a day.
 4. When happy: `sudo systemctl disable --now llama-swap`, then either move
-   LLMchooser to :1234 (change the ExecStart port) or repoint clients.
+   LlmChooser to :1234 (change the ExecStart port) or repoint clients.
 5. Rollback: `sudo systemctl enable --now llama-swap`.
 
 Not handled yet: `ttl_seconds` (idle unload). llama-swap unloads idle
-models; LLMchooser keeps them running until stopped. `last_used` is
+models; LlmChooser keeps them running until stopped. `last_used` is
 recorded on every proxied request so an idle-stop job can be added.

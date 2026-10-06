@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Process;
+namespace LlmChooser\Process;
 
-use LLMchooser\Engine\Engine;
-use LLMchooser\Preset\Preset;
-use LLMchooser\Preset\PresetRepository;
+use LlmChooser\Engine\Engine;
+use LlmChooser\Preset\Preset;
+use LlmChooser\Preset\PresetRepository;
 use RuntimeException;
 
 /**

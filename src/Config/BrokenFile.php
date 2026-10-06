@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Config;
+namespace LlmChooser\Config;
 
 /**
  * A config file that could not be parsed. Internal, programmer-built, so

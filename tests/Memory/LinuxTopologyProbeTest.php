@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Tests\Memory;
+namespace LlmChooser\Tests\Memory;
 
-use LLMchooser\Memory\Device;
-use LLMchooser\Memory\LinuxTopologyProbe;
+use LlmChooser\Memory\Device;
+use LlmChooser\Memory\LinuxTopologyProbe;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 

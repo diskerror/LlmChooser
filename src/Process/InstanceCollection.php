@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Process;
+namespace LlmChooser\Process;
 
 use Diskerror\Typed\TypedArray;
 

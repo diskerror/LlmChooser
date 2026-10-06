@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Tests\Cli;
+namespace LlmChooser\Tests\Cli;
 
-use LLMchooser\Cli\Format;
+use LlmChooser\Cli\Format;
 use PHPUnit\Framework\TestCase;
 
 class FormatTest extends TestCase

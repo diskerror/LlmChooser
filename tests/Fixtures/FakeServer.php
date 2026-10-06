@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Tests\Fixtures;
+namespace LlmChooser\Tests\Fixtures;
 
 final class FakeServer
 {

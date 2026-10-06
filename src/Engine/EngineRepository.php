@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Engine;
+namespace LlmChooser\Engine;
 
-use LLMchooser\Config\BrokenFile;
-use LLMchooser\Config\JsonStore;
+use LlmChooser\Config\BrokenFile;
+use LlmChooser\Config\JsonStore;
 use RuntimeException;
 
 class EngineRepository

@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Tests\Http;
+namespace LlmChooser\Tests\Http;
 
-use LLMchooser\Engine\Engine;
-use LLMchooser\Engine\EngineRepository;
-use LLMchooser\Http\FieldHints;
-use LLMchooser\Http\PresetForm;
-use LLMchooser\Http\PresetValidator;
-use LLMchooser\Model\ModelEntry;
-use LLMchooser\Preset\Preset;
-use LLMchooser\Preset\PresetArgs;
-use LLMchooser\Preset\PresetRepository;
-use LLMchooser\Tests\Model\GgufFixture;
+use LlmChooser\Engine\Engine;
+use LlmChooser\Engine\EngineRepository;
+use LlmChooser\Http\FieldHints;
+use LlmChooser\Http\PresetForm;
+use LlmChooser\Http\PresetValidator;
+use LlmChooser\Model\ModelEntry;
+use LlmChooser\Preset\Preset;
+use LlmChooser\Preset\PresetArgs;
+use LlmChooser\Preset\PresetRepository;
+use LlmChooser\Tests\Model\GgufFixture;
 use PHPUnit\Framework\TestCase;
 
 class PresetFormTest extends TestCase

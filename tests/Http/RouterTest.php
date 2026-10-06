@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Tests\Http;
+namespace LlmChooser\Tests\Http;
 
-use LLMchooser\Http\Html;
-use LLMchooser\Http\Request;
-use LLMchooser\Http\Router;
-use LLMchooser\Http\Response;
+use LlmChooser\Http\Html;
+use LlmChooser\Http\Request;
+use LlmChooser\Http\Router;
+use LlmChooser\Http\Response;
 use PHPUnit\Framework\TestCase;
 
 class RouterTest extends TestCase

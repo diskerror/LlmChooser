@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Http;
+namespace LlmChooser\Http;
 
-use LLMchooser\App;
-use LLMchooser\Cli\Format;
-use LLMchooser\Memory\Allocation;
-use LLMchooser\Memory\Device;
-use LLMchooser\Process\AdmissionException;
-use LLMchooser\Process\Instance;
-use LLMchooser\Process\ProcessControl;
-use LLMchooser\Preset\Preset;
+use LlmChooser\App;
+use LlmChooser\Cli\Format;
+use LlmChooser\Memory\Allocation;
+use LlmChooser\Memory\Device;
+use LlmChooser\Process\AdmissionException;
+use LlmChooser\Process\Instance;
+use LlmChooser\Process\ProcessControl;
+use LlmChooser\Preset\Preset;
 use Throwable;
 
 /**
@@ -74,7 +74,7 @@ final class WebApp
 		$mem = '';
 		try {
 			$topo  = $this->app->memory->topology();
-			$mem  .= '<table><tr><th>Device</th><th>Total</th><th>Available</th><th>Est. in use by LLMchooser</th><th></th></tr>';
+			$mem  .= '<table><tr><th>Device</th><th>Total</th><th>Available</th><th>Est. in use by LlmChooser</th><th></th></tr>';
 			foreach ($topo->devices as $d) {
 				if ($topo->budgetId($d->id) !== $d->id) {
 					continue; // unified GPUs fold into their budget device

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Model;
+namespace LlmChooser\Model;
 
 /**
  * Metadata read from a GGUF header. Plain value object, not a TypedClass:

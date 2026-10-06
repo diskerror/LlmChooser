@@ -2,22 +2,22 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Tests\Proxy;
+namespace LlmChooser\Tests\Proxy;
 
-use LLMchooser\App;
-use LLMchooser\Engine\Engine;
-use LLMchooser\Engine\EngineRepository;
-use LLMchooser\Http\Request;
-use LLMchooser\Memory\Device;
-use LLMchooser\Memory\FixedTopologyProbe;
-use LLMchooser\Memory\MemoryTopology;
-use LLMchooser\Preset\Preset;
-use LLMchooser\Preset\PresetRepository;
-use LLMchooser\Process\Instance;
-use LLMchooser\Process\ProcessControl;
-use LLMchooser\Proxy\ChatProxy;
-use LLMchooser\Tests\Fixtures\FakeServer;
-use LLMchooser\Tests\Model\GgufFixture;
+use LlmChooser\App;
+use LlmChooser\Engine\Engine;
+use LlmChooser\Engine\EngineRepository;
+use LlmChooser\Http\Request;
+use LlmChooser\Memory\Device;
+use LlmChooser\Memory\FixedTopologyProbe;
+use LlmChooser\Memory\MemoryTopology;
+use LlmChooser\Preset\Preset;
+use LlmChooser\Preset\PresetRepository;
+use LlmChooser\Process\Instance;
+use LlmChooser\Process\ProcessControl;
+use LlmChooser\Proxy\ChatProxy;
+use LlmChooser\Tests\Fixtures\FakeServer;
+use LlmChooser\Tests\Model\GgufFixture;
 use PHPUnit\Framework\TestCase;
 
 /**

@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Proxy;
+namespace LlmChooser\Proxy;
 
-use LLMchooser\App;
-use LLMchooser\Config\BrokenFile;
-use LLMchooser\Http\Request;
-use LLMchooser\Process\Instance;
-use LLMchooser\Process\InstanceCollection;
+use LlmChooser\App;
+use LlmChooser\Config\BrokenFile;
+use LlmChooser\Http\Request;
+use LlmChooser\Process\Instance;
+use LlmChooser\Process\InstanceCollection;
 
 /**
  * OpenAI-compatible passthrough: /v1/* is forwarded to one preset's running instance.

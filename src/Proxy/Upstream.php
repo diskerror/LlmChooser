@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Proxy;
+namespace LlmChooser\Proxy;
 
-use LLMchooser\Http\Request;
+use LlmChooser\Http\Request;
 
 /** Forwards one request to http://host:port and streams the answer to an Emitter. */
 final class Upstream

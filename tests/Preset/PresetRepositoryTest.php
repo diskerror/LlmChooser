@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Tests\Preset;
+namespace LlmChooser\Tests\Preset;
 
-use LLMchooser\Preset\Preset;
-use LLMchooser\Preset\PresetCollection;
-use LLMchooser\Preset\PresetRepository;
+use LlmChooser\Preset\Preset;
+use LlmChooser\Preset\PresetCollection;
+use LlmChooser\Preset\PresetRepository;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 

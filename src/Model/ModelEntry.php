@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Model;
+namespace LlmChooser\Model;
 
 final class ModelEntry
 {

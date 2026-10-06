@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Tests\Memory;
+namespace LlmChooser\Tests\Memory;
 
-use LLMchooser\Memory\Device;
-use LLMchooser\Memory\MemoryEstimator;
-use LLMchooser\Memory\MemoryTopology;
-use LLMchooser\Model\GgufReader;
-use LLMchooser\Preset\Preset;
-use LLMchooser\Tests\Model\GgufFixture;
+use LlmChooser\Memory\Device;
+use LlmChooser\Memory\MemoryEstimator;
+use LlmChooser\Memory\MemoryTopology;
+use LlmChooser\Model\GgufReader;
+use LlmChooser\Preset\Preset;
+use LlmChooser\Tests\Model\GgufFixture;
 use PHPUnit\Framework\TestCase;
 
 class MemoryEstimatorTest extends TestCase

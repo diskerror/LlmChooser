@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Memory;
+namespace LlmChooser\Memory;
 
 /**
  * Returns a topology handed to its constructor: used by tests, and

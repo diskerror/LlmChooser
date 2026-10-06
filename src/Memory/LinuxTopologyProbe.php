@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Memory;
+namespace LlmChooser\Memory;
 
 use Closure;
 use RuntimeException;
@@ -13,7 +13,7 @@ use RuntimeException;
  * Both roots are constructor arguments and command execution is injected, so
  * the whole thing is testable against fake directories without touching the
  * host. Only the Linux path is implemented; macOS/Windows detection is not a
- * goal (LLMchooser runs its instances on the Linux box).
+ * goal (LlmChooser runs its instances on the Linux box).
  */
 final class LinuxTopologyProbe implements TopologyProbe
 {

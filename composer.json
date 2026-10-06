@@ -16,7 +16,7 @@
     ],
     "autoload": {
         "psr-4": {
-            "LLMchooser\\": "src/"
+            "LlmChooser\\": "src/"
         }
     },
     "require-dev": {
@@ -24,7 +24,7 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "LLMchooser\\Tests\\": "tests/"
+            "LlmChooser\\Tests\\": "tests/"
         }
     }
 }

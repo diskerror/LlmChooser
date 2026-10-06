@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Memory;
+namespace LlmChooser\Memory;
 
 /** Estimated bytes needed, per device id (before unified aliasing). */
 final class Allocation

@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Cli;
+namespace LlmChooser\Cli;
 
-use LLMchooser\App;
-use LLMchooser\Memory\Allocation;
-use LLMchooser\Process\AdmissionException;
-use LLMchooser\Process\HealthChecker;
-use LLMchooser\Process\Instance;
-use LLMchooser\Process\ProcessControl;
+use LlmChooser\App;
+use LlmChooser\Memory\Allocation;
+use LlmChooser\Process\AdmissionException;
+use LlmChooser\Process\HealthChecker;
+use LlmChooser\Process\Instance;
+use LlmChooser\Process\ProcessControl;
 use Throwable;
 
 /**

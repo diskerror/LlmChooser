@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Tests\Model;
+namespace LlmChooser\Tests\Model;
 
-use LLMchooser\Model\GgufReader as R;
+use LlmChooser\Model\GgufReader as R;
 
 final class GgufFixture
 {

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Tests\Engine;
+namespace LlmChooser\Tests\Engine;
 
-use LLMchooser\Engine\Engine;
-use LLMchooser\Model\ModelEntry;
+use LlmChooser\Engine\Engine;
+use LlmChooser\Model\ModelEntry;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use TypeError;

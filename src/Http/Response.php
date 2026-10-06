@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Http;
+namespace LlmChooser\Http;
 
 final class Response
 {

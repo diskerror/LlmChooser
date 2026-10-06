@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Tests\Engine;
+namespace LlmChooser\Tests\Engine;
 
-use LLMchooser\Engine\PortRange;
+use LlmChooser\Engine\PortRange;
 use PHPUnit\Framework\TestCase;
 
 class PortRangeTest extends TestCase

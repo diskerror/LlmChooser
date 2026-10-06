@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Proxy;
+namespace LlmChooser\Proxy;
 
 /** Where the proxy writes its response. Tests use a collecting subclass. */
 class Emitter

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Process;
+namespace LlmChooser\Process;
 
-use LLMchooser\Memory\AdmissionResult;
+use LlmChooser\Memory\AdmissionResult;
 use RuntimeException;
 
 class AdmissionException extends RuntimeException

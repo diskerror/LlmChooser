@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Process;
+namespace LlmChooser\Process;
 
-use LLMchooser\Engine\EngineRepository;
-use LLMchooser\Memory\Allocation;
-use LLMchooser\Memory\MemoryService;
-use LLMchooser\Preset\Preset;
-use LLMchooser\Preset\PresetRepository;
+use LlmChooser\Engine\EngineRepository;
+use LlmChooser\Memory\Allocation;
+use LlmChooser\Memory\MemoryService;
+use LlmChooser\Preset\Preset;
+use LlmChooser\Preset\PresetRepository;
 use RuntimeException;
 
 /**
@@ -212,7 +212,7 @@ final class ProcessManager
 				}
 				if (!$this->isOurs($i)) {
 					$i->status  = Instance::ERROR;
-					$i->message = 'process not found (LLMchooser or host restarted?)';
+					$i->message = 'process not found (LlmChooser or host restarted?)';
 				}
 			}
 		});

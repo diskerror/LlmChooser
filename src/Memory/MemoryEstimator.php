@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Memory;
+namespace LlmChooser\Memory;
 
-use LLMchooser\Model\GgufInfo;
-use LLMchooser\Model\ModelFiles;
-use LLMchooser\Preset\Preset;
+use LlmChooser\Model\GgufInfo;
+use LlmChooser\Model\ModelFiles;
+use LlmChooser\Preset\Preset;
 
 /**
  * Estimates the memory an instance will need and which devices carry it.

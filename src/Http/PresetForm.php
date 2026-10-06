@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Http;
+namespace LlmChooser\Http;
 
-use LLMchooser\Cli\Format;
-use LLMchooser\Model\ModelEntry;
-use LLMchooser\Preset\Preset;
-use LLMchooser\Preset\PresetArgs;
+use LlmChooser\Cli\Format;
+use LlmChooser\Model\ModelEntry;
+use LlmChooser\Preset\Preset;
+use LlmChooser\Preset\PresetArgs;
 use ReflectionProperty;
 
 /**

@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Tests\Memory;
+namespace LlmChooser\Tests\Memory;
 
-use LLMchooser\Memory\AdmissionCheck;
-use LLMchooser\Memory\Allocation;
-use LLMchooser\Memory\Device;
-use LLMchooser\Memory\MemoryTopology;
+use LlmChooser\Memory\AdmissionCheck;
+use LlmChooser\Memory\Allocation;
+use LlmChooser\Memory\Device;
+use LlmChooser\Memory\MemoryTopology;
 use PHPUnit\Framework\TestCase;
 
 class AdmissionCheckTest extends TestCase

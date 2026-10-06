@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Http;
+namespace LlmChooser\Http;
 
-use LLMchooser\Engine\EngineRepository;
-use LLMchooser\Preset\Preset;
-use LLMchooser\Preset\PresetRepository;
+use LlmChooser\Engine\EngineRepository;
+use LlmChooser\Preset\Preset;
+use LlmChooser\Preset\PresetRepository;
 use Throwable;
 
 final class PresetValidator

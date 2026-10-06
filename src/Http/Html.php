@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Http;
+namespace LlmChooser\Http;
 
 final class Html
 {
@@ -21,9 +21,9 @@ final class Html
 		$flash = $msg !== '' ? '<p class="flash">' . self::e($msg) . '</p>' : '';
 		return '<!doctype html><html lang="en"><head><meta charset="utf-8">'
 			. '<meta name="viewport" content="width=device-width, initial-scale=1">'
-			. '<title>' . self::e($title) . ' · LLMchooser</title>'
+			. '<title>' . self::e($title) . ' · LlmChooser</title>'
 			. '<link rel="stylesheet" href="/assets/style.css">' . $head . '</head><body>'
-			. '<header><a href="/" class="brand">LLMchooser</a> '
+			. '<header><a href="/" class="brand">LlmChooser</a> '
 			. '<nav><a href="/">Dashboard</a> <a href="/presets">Presets</a> <a href="/models">Models</a></nav></header>'
 			. '<main><h1>' . self::e($title) . '</h1>' . $flash . $body . '</main></body></html>';
 	}

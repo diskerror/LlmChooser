@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Cli;
+namespace LlmChooser\Cli;
 
 /** Writes to two streams so tests can capture output. */
 final class Output

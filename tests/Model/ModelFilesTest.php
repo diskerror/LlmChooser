@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Tests\Model;
+namespace LlmChooser\Tests\Model;
 
-use LLMchooser\Model\ModelFiles;
+use LlmChooser\Model\ModelFiles;
 use PHPUnit\Framework\TestCase;
 
 class ModelFilesTest extends TestCase

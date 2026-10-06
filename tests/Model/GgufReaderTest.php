@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Tests\Model;
+namespace LlmChooser\Tests\Model;
 
-use LLMchooser\Model\GgufException;
-use LLMchooser\Model\GgufReader;
+use LlmChooser\Model\GgufException;
+use LlmChooser\Model\GgufReader;
 use PHPUnit\Framework\TestCase;
 
 class GgufReaderTest extends TestCase

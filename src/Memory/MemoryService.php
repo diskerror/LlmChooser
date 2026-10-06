@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Memory;
+namespace LlmChooser\Memory;
 
-use LLMchooser\Model\GgufReader;
-use LLMchooser\Preset\Preset;
+use LlmChooser\Model\GgufReader;
+use LlmChooser\Preset\Preset;
 
 /**
  * One call for callers: detect once, estimate, admit.

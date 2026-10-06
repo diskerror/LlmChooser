@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Cli;
+namespace LlmChooser\Cli;
 
-use LLMchooser\App;
+use LlmChooser\App;
 
 /**
  * systemd unit files for "start this preset at boot".
@@ -33,7 +33,7 @@ final class StartupManager
 	{
 		return <<<TXT
 		[Unit]
-		Description=LLMchooser preset {$presetId}
+		Description=LlmChooser preset {$presetId}
 		After=network-online.target
 		Wants=network-online.target
 

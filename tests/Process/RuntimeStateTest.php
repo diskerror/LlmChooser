@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Tests\Process;
+namespace LlmChooser\Tests\Process;
 
-use LLMchooser\Process\Instance;
-use LLMchooser\Process\RuntimeState;
+use LlmChooser\Process\Instance;
+use LlmChooser\Process\RuntimeState;
 use PHPUnit\Framework\TestCase;
 
 class RuntimeStateTest extends TestCase

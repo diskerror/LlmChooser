@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Preset;
+namespace LlmChooser\Preset;
 
 use Diskerror\Typed\TypedClass;
 

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Config;
+namespace LlmChooser\Config;
 
 use JsonException;
 use RuntimeException;

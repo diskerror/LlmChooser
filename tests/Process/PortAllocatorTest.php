@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace LLMchooser\Tests\Process;
+namespace LlmChooser\Tests\Process;
 
-use LLMchooser\Engine\Engine;
-use LLMchooser\Preset\Preset;
-use LLMchooser\Preset\PresetRepository;
-use LLMchooser\Process\PortAllocator;
+use LlmChooser\Engine\Engine;
+use LlmChooser\Preset\Preset;
+use LlmChooser\Preset\PresetRepository;
+use LlmChooser\Process\PortAllocator;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
