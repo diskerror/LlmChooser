@@ -118,7 +118,9 @@ class WebAppTest extends TestCase
 		$this->assertSame(200, $res->status);
 		$this->assertStringContainsString('p1', $res->body);
 		$this->assertStringContainsString('p2', $res->body);
-		$this->assertStringContainsString('stopped', $res->body);
+		// Phase 11: stopped presets show under Available, not as 'stopped' rows.
+		$this->assertStringContainsString('Available', $res->body);
+		$this->assertStringContainsString('Nothing loaded.', $res->body);
 	}
 
 	public function testPresetListLinks(): void
@@ -371,5 +373,134 @@ class WebAppTest extends TestCase
 			'model_path' => $this->dir . '/models/m.gguf',
 		]);
 		$this->assertFalse($this->app->presets->load('p1')->enabled);
+	}
+
+	// ---- Phase 11: Loaded/Available panels, memory bar, Test ----
+
+	/** HTML between two markers, so 'appears in panel A not B' is real. */
+	private function section(string $body, string $h2): string
+	{
+		$start = strpos($body, '<h2>' . $h2 . '</h2>');
+		$this->assertIsInt($start, "no {$h2} section");
+		$end = strpos($body, '</section>', $start);
+		return substr($body, $start, $end - $start);
+	}
+
+	public function testDashboardSplitsLoadedAndAvailable(): void
+	{
+		$this->post('/presets/p1/start');
+		$this->app->processes->waitUntilReady('p1', 30);
+
+		$body = $this->get('/')->body;
+		$loaded    = $this->section($body, 'Loaded');
+		$available = $this->section($body, 'Available');
+		$this->assertStringContainsString('/presets/p1/edit', $loaded);
+		$this->assertStringContainsString('badge-ready', $loaded);
+		$this->assertStringNotContainsString('/presets/p2/edit', $loaded);
+		$this->assertStringContainsString('/presets/p2/edit', $available);
+		$this->assertStringNotContainsString('/presets/p1/edit', $available);
+	}
+
+	public function testDashboardExcludesDisabledFromAvailable(): void
+	{
+		$this->app->presets->setEnabled('p1', false);
+		$available = $this->section($this->get('/')->body, 'Available');
+		$this->assertStringNotContainsString('/presets/p1/edit', $available);
+		$this->assertStringContainsString('/presets/p2/edit', $available);
+	}
+
+	public function testAvailableShowsFitsCheck(): void
+	{
+		// Generous topology (100 GB) → fits; rebuild with 0.5 GB → must not.
+		$available = $this->section($this->get('/')->body, 'Available');
+		$this->assertStringContainsString('✓ fits', $available);
+
+		$this->app = $this->makeApp(0.5);
+		$this->web = new WebApp($this->app);
+		$available = $this->section($this->get('/')->body, 'Available');
+		$this->assertStringContainsString('✗ needs', $available);
+		$this->assertStringContainsString('more', $available);
+	}
+
+	public function testMemoryBarRendersOneSegmentPerRunningInstance(): void
+	{
+		$this->post('/presets/p1/start');
+		$this->post('/presets/p2/start');
+		$this->app->processes->waitUntilReady('p1', 30);
+		$this->app->processes->waitUntilReady('p2', 30);
+
+		$mem = $this->section($this->get('/')->body, 'Memory');
+		$this->assertSame(2, substr_count($mem, 'class="segment"') + substr_count($mem, 'class="segment loading"'));
+		$this->assertStringContainsString('title="p1:', $mem);
+		$this->assertStringContainsString('title="p2:', $mem);
+	}
+
+	public function testApiDashboardPanelsReturnsHtmlFragments(): void
+	{
+		$this->post('/presets/p1/start');
+		$this->app->processes->waitUntilReady('p1', 30);
+
+		$res = $this->get('/api/dashboard-panels');
+		$this->assertSame(200, $res->status);
+		$data = json_decode($res->body, true);
+		$this->assertIsArray($data);
+		$this->assertArrayHasKey('loaded_html', $data);
+		$this->assertArrayHasKey('available_html', $data);
+		$this->assertStringContainsString('/presets/p1/edit', $data['loaded_html']);
+		$this->assertStringContainsString('/presets/p2/edit', $data['available_html']);
+	}
+
+	public function testTestEndpointRunningPresetReturnsTiming(): void
+	{
+		$this->post('/presets/p1/start');
+		$this->app->processes->waitUntilReady('p1', 30);
+
+		$res = $this->post('/presets/p1/test');
+		$this->assertSame(200, $res->status);
+		$data = json_decode($res->body, true);
+		$this->assertTrue($data['ok'], $res->body);
+		$this->assertIsInt($data['ttft_ms']);
+		$this->assertIsInt($data['total_ms']);
+		$this->assertGreaterThanOrEqual(0, $data['ttft_ms']);
+		$this->assertGreaterThanOrEqual($data['ttft_ms'], $data['total_ms']);
+	}
+
+	public function testTestEndpointNotRunningPreset(): void
+	{
+		$res  = $this->post('/presets/p1/test');
+		$data = json_decode($res->body, true);
+		$this->assertFalse($data['ok']);
+		$this->assertStringContainsString('not running', $data['error']);
+	}
+
+	public function testTestEndpointDeadUpstream(): void
+	{
+		$this->post('/presets/p1/start');
+		$this->app->processes->waitUntilReady('p1', 30);
+		$i = $this->app->state->get('p1');
+		(new \LlmChooser\Process\ProcessControl())->signal((int)$i->pid, 'KILL');
+		// give the OS a moment, then skip refresh() so the status is still
+		// READY and the curl path is what reports the death.
+		usleep(300000);
+
+		$res  = $this->post('/presets/p1/test');
+		$data = json_decode($res->body, true);
+		$this->assertFalse($data['ok'], $res->body);
+		$this->assertStringContainsString('upstream failed', $data['error']);
+	}
+
+	public function testHeaderShowsRunningCountAndMemory(): void
+	{
+		$this->post('/presets/p1/start');
+		$this->app->processes->waitUntilReady('p1', 30);
+
+		$body = $this->get('/')->body;
+		$this->assertStringContainsString('<span class="summary">', $body);
+		$this->assertStringContainsString('1 running', $body);
+		$this->assertStringContainsString('RAM ', $body);
+		$this->assertStringContainsString('/107.4 GB', $body); // 100 GiB in Format::gb style
+
+		// summary appears on other pages too
+		$this->assertStringContainsString('1 running', $this->get('/presets')->body);
 	}
 }

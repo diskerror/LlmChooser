@@ -7,10 +7,8 @@ namespace LlmChooser\Http;
 use LlmChooser\App;
 use LlmChooser\Cli\Format;
 use LlmChooser\Memory\Allocation;
-use LlmChooser\Memory\Device;
 use LlmChooser\Process\AdmissionException;
 use LlmChooser\Process\Instance;
-use LlmChooser\Process\ProcessControl;
 use LlmChooser\Preset\Preset;
 use Throwable;
 
@@ -35,7 +33,7 @@ final class WebApp
 			return $this->router->dispatch($r);
 		} catch (Throwable $e) {
 			return Response::html(
-				Html::page('Error', '<pre>' . Html::e($e->getMessage()) . '</pre>', '', '', $r->path),
+				Html::page('Error', '<pre>' . Html::e($e->getMessage()) . '</pre>', '', '', $r->path, $this->headerSummary($this->app->state->all())),
 				500
 			);
 		}
@@ -57,10 +55,12 @@ final class WebApp
 		$rt->add('POST', '/presets/{id}/restart', fn(Request $r, array $p): Response => $this->start($r, $p['id'], 'restart'));
 		$rt->add('POST', '/presets/{id}/stop', fn(Request $r, array $p): Response => $this->stop($p['id']));
 		$rt->add('POST', '/presets/{id}/estimate', fn(Request $r, array $p): Response => $this->estimate($r, $p['id']));
+		$rt->add('POST', '/presets/{id}/test', fn(Request $r, array $p): Response => $this->test($p['id']));
 		$rt->add('GET', '/presets/{id}/log', fn(Request $r, array $p): Response => $this->log($r, $p['id']));
 		$rt->add('GET', '/models', fn(Request $r): Response => $this->models($r));
 		$rt->add('GET', '/health', fn(Request $r): Response => Response::json(['status' => 'ok']));
 		$rt->add('GET', '/api/status', fn(Request $r): Response => $this->apiStatus());
+		$rt->add('GET', '/api/dashboard-panels', fn(Request $r): Response => $this->apiDashboardPanels());
 		$rt->add('GET', '/assets/style.css', fn(Request $r): Response => $this->css());
 		$rt->add('GET', '/assets/app.js', fn(Request $r): Response => $this->js());
 	}
@@ -72,57 +72,37 @@ final class WebApp
 		$instances = $this->app->processes->refresh();
 		$presets   = $this->app->presets->loadAll();
 
-		// Memory section. macOS (and any box without /proc/meminfo) must still
-		// render the rest of the dashboard — rule from Step 8.
-		$mem = '';
-		try {
-			$topo  = $this->app->memory->topology();
-			$mem  .= '<table><tr><th>Device</th><th>Total</th><th>Available</th><th>Est. in use by LlmChooser</th><th></th></tr>';
-			foreach ($topo->devices as $d) {
-				if ($topo->budgetId($d->id) !== $d->id) {
-					continue; // unified GPUs fold into their budget device
-				}
-				$inUse = 0;
-				foreach ($instances as $i) {
-					if ($i->allocation === [] || $i->status === Instance::STOPPED) {
-						continue;
-					}
-					foreach (Allocation::fromArray($i->allocation)->perDevice as $devId => $bytes) {
-						if ($topo->budgetId((string)$devId) === $d->id) {
-							$inUse += (int)$bytes;
-						}
-					}
-				}
-				$mem .= '<tr><td>' . Html::e($d->id) . '</td>'
-					. '<td>' . Html::e(Format::gb($d->totalBytes)) . '</td>'
-					. '<td>' . Html::e(Format::gb($d->availableBytes)) . '</td>'
-					. '<td>' . Html::e(Format::gb($inUse)) . '</td>'
-					. '<td><meter min="0" max="' . $d->totalBytes . '" value="' . max(0, $d->totalBytes - $d->availableBytes) . '"></meter></td></tr>';
-			}
-			$mem .= '</table>';
-			if ($topo->isUnified()) {
-				$mem .= '<p>unified memory</p>';
-			}
-		} catch (Throwable $e) {
-			$mem = '<p class="flash">Memory info unavailable: ' . Html::e($e->getMessage()) . '</p>';
-		}
+		$loaded   = $this->loadedRows($instances, $presets);
+		$available = $this->availableRows($instances, $presets);
 
 		$head = '';
-		$rows = '';
-		foreach ($this->instanceRows($instances, $presets) as $row) {
-			$rows .= $row['html'];
-			if ($row['status'] === Instance::LOADING) {
+		foreach ($instances as $i) {
+			if ($i->status === Instance::LOADING) {
 				$head = '<meta http-equiv="refresh" content="5">';
+				break;
 			}
 		}
 
-		$body = '<section><h2>Memory</h2>' . $mem . '</section>'
-			. '<section><h2>Instances</h2><table><tr><th>Preset</th><th>Status</th><th>PID</th><th>Port</th><th>Uptime</th><th>Estimate</th><th>RSS</th><th>Actions</th></tr>'
-			. ($rows !== '' ? $rows : '<tr><td colspan="8">No presets.</td></tr>')
-			. '</table></section>'
+		$body = $this->memorySection($instances)
+			. '<section><h2>Loaded</h2>' . $this->loadedTable($loaded) . '</section>'
+			. '<section><h2>Available</h2>'
+			. '<table><tr><th>Preset</th><th>Model</th><th>Ctx</th><th>Est. memory</th><th>Fits?</th><th>Actions</th></tr>'
+			. '<tbody id="available-tbody">'
+			. ($available !== '' ? $available : '<tr><td colspan="6">Nothing available to start.</td></tr>')
+			. '</tbody></table></section>'
 			. $this->brokenBanner();
 
-		return Response::html(Html::page('Dashboard', $body, $r->query('msg'), $head, $r->path));
+		return Response::html(Html::page('Dashboard', $body, $r->query('msg'), $head, $r->path, $this->headerSummary($instances)));
+	}
+
+	/** @param iterable<string,Instance> $instances @param iterable<string,Preset> $presets */
+	private function loadedTable(string $rows): string
+	{
+		return '<table><tr><th>Preset</th><th>Model</th><th>Status</th><th>Port</th><th>Ctx</th>'
+			. '<th>Memory (est.)</th><th>Uptime</th><th>Last used</th><th>Actions</th></tr>'
+			. '<tbody id="loaded-tbody">'
+			. ($rows !== '' ? $rows : '<tr><td colspan="9">Nothing loaded.</td></tr>')
+			. '</tbody></table>';
 	}
 
 	private function presetList(Request $r): Response
@@ -178,7 +158,7 @@ final class WebApp
 			. '<table><tr><th>enabled</th><th>id</th><th>name</th><th>model</th><th>engine</th><th>alias</th><th>port</th><th>status</th><th>actions</th></tr>'
 			. ($rows !== '' ? $rows : '<tr><td colspan="9">No presets yet.</td></tr>')
 			. '</table>';
-		return Response::html(Html::page('Presets', $body, $r->query('msg'), '', $r->path));
+		return Response::html(Html::page('Presets', $body, $r->query('msg'), '', $r->path, $this->headerSummary($instances)));
 	}
 
 	/**
@@ -218,7 +198,7 @@ final class WebApp
 		} else {
 			$preset = new Preset();
 		}
-		return Response::html(Html::page('New preset', PresetForm::render($preset, $models, true), $r->query('msg'), '', $r->path));
+		return Response::html(Html::page('New preset', PresetForm::render($preset, $models, true), $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all())));
 	}
 
 	private function presetCreate(Request $r): Response
@@ -227,7 +207,7 @@ final class WebApp
 		$errors = PresetValidator::validate($preset, $this->app->engines, true, $this->app->presets);
 		if ($errors !== []) {
 			return Response::html(
-				Html::page('New preset', PresetForm::render($preset, $this->app->modelScanner()->scan(), true, $errors), '', '', $r->path),
+				Html::page('New preset', PresetForm::render($preset, $this->app->modelScanner()->scan(), true, $errors), '', '', $r->path, $this->headerSummary($this->app->state->all())),
 				422
 			);
 		}
@@ -240,11 +220,11 @@ final class WebApp
 		try {
 			$preset = $this->app->presets->load($id);
 		} catch (Throwable) {
-			return Response::html(Html::page('Not found', '<p>No preset ' . Html::e($id) . '.</p>', '', '', $r->path), 404);
+			return Response::html(Html::page('Not found', '<p>No preset ' . Html::e($id) . '.</p>', '', '', $r->path, $this->headerSummary($this->app->state->all())), 404);
 		}
 		$running = $this->instanceIsLive($id);
 		return Response::html(
-			Html::page('Edit ' . $id, PresetForm::render($preset, $this->app->modelScanner()->scan(), false, [], $running), $r->query('msg'), '', $r->path)
+			Html::page('Edit ' . $id, PresetForm::render($preset, $this->app->modelScanner()->scan(), false, [], $running), $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all()))
 		);
 	}
 
@@ -259,7 +239,7 @@ final class WebApp
 		try {
 			$preset = $this->app->presets->load($id);
 		} catch (Throwable) {
-			return Response::html(Html::page('Not found', '<p>No preset ' . Html::e($id) . '.</p>', '', '', $r->path), 404);
+			return Response::html(Html::page('Not found', '<p>No preset ' . Html::e($id) . '.</p>', '', '', $r->path, $this->headerSummary($this->app->state->all())), 404);
 		}
 		$preset->assign(PresetForm::fromPost($r->post));
 		$preset->id = $id; // editing never renames; the id input is readonly
@@ -268,7 +248,7 @@ final class WebApp
 		$errors = PresetValidator::validate($preset, $this->app->engines, false, $this->app->presets);
 		if ($errors !== []) {
 			return Response::html(
-				Html::page('Edit ' . $id, PresetForm::render($preset, $this->app->modelScanner()->scan(), false, $errors, $this->instanceIsLive($id))),
+				Html::page('Edit ' . $id, PresetForm::render($preset, $this->app->modelScanner()->scan(), false, $errors, $this->instanceIsLive($id)), '', '', $r->path, $this->headerSummary($this->app->state->all())),
 				422
 			);
 		}
@@ -314,7 +294,7 @@ final class WebApp
 				. '<form method="post" action="/presets/' . Html::e($id) . '/' . Html::e($op) . '">'
 				. '<input type="hidden" name="force" value="1">'
 				. '<button type="submit" class="danger">Start anyway</button></form>';
-			return Response::html(Html::page('Not enough memory', $body, '', '', $r->path), 200);
+			return Response::html(Html::page('Not enough memory', $body, '', '', $r->path, $this->headerSummary($this->app->state->all())), 200);
 		}
 	}
 
@@ -329,12 +309,12 @@ final class WebApp
 		try {
 			$preset = $this->app->presets->load($id);
 		} catch (Throwable) {
-			return Response::html(Html::page('Not found', '<p>No preset ' . Html::e($id) . '.</p>', '', '', $r->path), 404);
+			return Response::html(Html::page('Not found', '<p>No preset ' . Html::e($id) . '.</p>', '', '', $r->path, $this->headerSummary($this->app->state->all())), 404);
 		}
 		try {
 			$alloc = $this->app->memory->estimate($preset);
 		} catch (Throwable $e) {
-			return Response::html(Html::page('Estimate', '<p class="flash">Estimate failed: ' . Html::e($e->getMessage()) . '</p>', '', '', $r->path), 200);
+			return Response::html(Html::page('Estimate', '<p class="flash">Estimate failed: ' . Html::e($e->getMessage()) . '</p>', '', '', $r->path, $this->headerSummary($this->app->state->all())), 200);
 		}
 		$rows = '';
 		foreach ($alloc->breakdown as $k => $v) {
@@ -347,20 +327,20 @@ final class WebApp
 		$body = '<table><tr><th>Part</th><th>Bytes</th></tr>' . $rows
 			. '<tr><th>Total</th><th>' . Html::e(Format::gb($alloc->totalBytes())) . '</th></tr></table>'
 			. '<h2>Per device</h2><table><tr><th>Device</th><th>Bytes</th></tr>' . $devs . '</table>';
-		return Response::html(Html::page('Estimate ' . $id, $body, '', '', $r->path));
+		return Response::html(Html::page('Estimate ' . $id, $body, '', '', $r->path, $this->headerSummary($this->app->state->all())));
 	}
 
 	private function log(Request $r, string $id): Response
 	{
 		$i = $this->app->state->get($id);
 		if ($i === null || $i->log_file === '' || !is_file($i->log_file)) {
-			return Response::html(Html::page('Not found', '<p>No log for ' . Html::e($id) . '.</p>', '', '', $r->path), 404);
+			return Response::html(Html::page('Not found', '<p>No log for ' . Html::e($id) . '.</p>', '', '', $r->path, $this->headerSummary($this->app->state->all())), 404);
 		}
 		$text = Format::tail($i->log_file, 200);
 		if ($r->query('raw') === '1') {
 			return Response::text($text);
 		}
-		return Response::html(Html::page('Log ' . $id, '<pre class="log">' . Html::e($text) . '</pre>', '', '', $r->path));
+		return Response::html(Html::page('Log ' . $id, '<pre class="log">' . Html::e($text) . '</pre>', '', '', $r->path, $this->headerSummary($this->app->state->all())));
 	}
 
 	private function models(Request $r): Response
@@ -383,7 +363,7 @@ final class WebApp
 			. '<table><tr><th>Model</th><th>Size</th><th>Arch</th><th>Ctx</th><th>Shards</th><th>Sidecars</th><th>Error</th></tr>'
 			. ($rows !== '' ? $rows : '<tr><td colspan="7">No models found.</td></tr>')
 			. '</table>';
-		return Response::html(Html::page('Models', $body, $r->query('msg'), '', $r->path));
+		return Response::html(Html::page('Models', $body, $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all())));
 	}
 
 	private function apiStatus(): Response
@@ -402,6 +382,95 @@ final class WebApp
 		return Response::json($list);
 	}
 
+	/**
+	 * Dashboard auto-refresh payload (GUI-DESIGN.md §3): HTML fragments
+	 * built by the SAME row renderers the full page uses, so the two can
+	 * never drift. Deliberately not raw JSON + client templating — this
+	 * app renders all markup in PHP.
+	 */
+	private function apiDashboardPanels(): Response
+	{
+		$instances = $this->app->processes->refresh();
+		$presets   = $this->app->presets->loadAll();
+		return Response::json([
+			'loaded_html'   => $this->loadedRows($instances, $presets),
+			'available_html' => $this->availableRows($instances, $presets),
+		]);
+	}
+
+	/**
+	 * Test button (GUI-DESIGN.md §3): one real one-token chat completion
+	 * straight to the instance — never through ChatProxy, since host and
+	 * port are already known and the response is a single JSON object.
+	 * "ttft_ms" is really time-to-first-response-byte (curl's header
+	 * callback fires on headers, not tokens); labelled that way in the
+	 * payload comment for the JS.
+	 */
+	private function test(string $id): Response
+	{
+		$i = $this->app->state->get($id);
+		if ($i === null || $i->status !== Instance::READY) {
+			return Response::json(['ok' => false, 'error' => 'Preset is not running.']);
+		}
+
+		$model = $id;
+		try {
+			$p = $this->app->presets->load($id);
+			$model = $p->args->alias !== '' ? $p->args->alias : $id;
+		} catch (Throwable) {
+			// preset file gone; the instance still answers to its id alias
+		}
+
+		$body = json_encode([
+			'model'       => $model,
+			'messages'    => [['role' => 'user', 'content' => 'hi']],
+			'max_tokens'  => 1,
+			'stream'      => false,
+		], JSON_UNESCAPED_SLASHES);
+
+		$begin     = microtime(true);
+		$firstByte = null;
+		$response  = '';
+		$ch        = curl_init("http://{$i->host}:{$i->port}/v1/chat/completions");
+		curl_setopt_array($ch, [
+			CURLOPT_POST           => true,
+			CURLOPT_POSTFIELDS     => $body,
+			CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+			CURLOPT_CONNECTTIMEOUT => 5,
+			CURLOPT_TIMEOUT        => 120, // a cold model can take a while for one token
+			CURLOPT_HEADERFUNCTION => function ($ch, string $line) use (&$firstByte): int {
+				if ($firstByte === null && trim($line) !== '') {
+					$firstByte = microtime(true);
+				}
+				return strlen($line);
+			},
+			CURLOPT_WRITEFUNCTION  => function ($ch, string $data) use (&$response): int {
+				$response .= $data;
+				return strlen($data);
+			},
+		]);
+		$ok   = curl_exec($ch);
+		$code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+		$err  = curl_error($ch);
+		curl_close($ch);
+		$end = microtime(true);
+
+		if ($ok === false) {
+			return Response::json(['ok' => false, 'error' => 'upstream failed: ' . ($err !== '' ? $err : 'no response')]);
+		}
+		if ($code < 200 || $code >= 300) {
+			$detail = trim(preg_replace('/\s+/', ' ', $response) ?? '');
+			return Response::json(['ok' => false, 'error' => 'HTTP ' . $code . ($detail !== '' ? ': ' . substr($detail, 0, 200) : '')]);
+		}
+
+		return Response::json([
+			'ok'       => true,
+			// time to first response byte, not literally first token (see doc comment)
+			'ttft_ms'  => (int)round((($firstByte ?? $end) - $begin) * 1000),
+			'total_ms' => (int)round(($end - $begin) * 1000),
+		]);
+	}
+
 	private function css(): Response
 	{
 		$file = dirname(__DIR__, 2) . '/public/assets/style.css';
@@ -417,58 +486,230 @@ final class WebApp
 	}
 
 	/**
-	 * Dashboard instance rows: one per preset, plus instances whose preset
-	 * file is gone — a running server must never look like it does not exist.
+	 * Loaded panel rows: one per instance that is LOADING, READY or ERROR
+	 * — including instances whose preset file is gone (GUI-DESIGN.md §3).
+	 * ERROR deviates from the doc's "running or loading" wording: a dead
+	 * instance's message must stay visible somewhere, and Available is
+	 * the wrong place for it (the preset IS there, listed by Start).
 	 *
 	 * @param iterable<string,Instance> $instances
-	 * @return list<array{html:string,status:string}>
+	 * @param iterable<string,Preset> $presets
 	 */
-	private function instanceRows(iterable $instances, iterable $presets): array
+	private function loadedRows(iterable $instances, iterable $presets): string
 	{
-		$rows = [];
-		$seen = [];
-		$pc   = new ProcessControl();
+		$byPreset = [];
 		foreach ($presets as $pid => $p) {
-			$i          = $instances[$pid] ?? null;
-			$seen[$pid] = true;
-			$rows[]     = $this->instanceRow((string)$pid, $i, $pc, $p->assigned_port, $p->enabled);
+			$byPreset[$pid] = $p;
 		}
+		$rows = '';
 		foreach ($instances as $pid => $i) {
-			if (!isset($seen[$pid])) {
-				$rows[] = $this->instanceRow((string)$pid, $i, $pc, null, true);
+			if (!in_array($i->status, [Instance::LOADING, Instance::READY, Instance::ERROR], true)) {
+				continue;
+			}
+			$p     = $byPreset[$pid] ?? null;
+			$model = $p !== null && $p->model_path !== '' ? basename($p->model_path) : '-';
+			$alloc = $i->allocation !== [] ? Allocation::fromArray($i->allocation) : null;
+			if ($i->status === Instance::ERROR) {
+				$acts = Html::postButton("/presets/{$pid}/start", 'Start')
+					. '<a class="btn" href="/presets/' . Html::e($pid) . '/log">Log</a>';
+			} else {
+				$acts = Html::postButton("/presets/{$pid}/stop", 'Stop')
+					. Html::postButton("/presets/{$pid}/restart", 'Restart')
+					. '<a class="btn" href="/presets/' . Html::e($pid) . '/log">Log</a> '
+					. Html::postButton("/presets/{$pid}/test", 'Test', '', '', 'test-form')
+					. '<span class="test-result"></span>';
+			}
+			$rows .= '<tr><td><a href="/presets/' . Html::e($pid) . '/edit">' . Html::e($pid) . '</a></td>'
+				. '<td>' . Html::e($model) . '</td>'
+				. '<td>' . $this->badge($i->status) . '</td>'
+				. '<td>' . Html::e((string)($i->port ?: '-')) . '</td>'
+				. '<td>' . $this->ctxCell($p) . '</td>'
+				. '<td>' . ($alloc !== null ? Html::e(Format::gb($alloc->totalBytes())) : '-') . '</td>'
+				. '<td>' . ($i->started_at > 0 ? Html::e(Format::duration(time() - $i->started_at)) : '-') . '</td>'
+				. '<td>' . ($i->last_used > 0 ? Html::e(Format::duration(time() - $i->last_used)) . ' ago' : '-') . '</td>'
+				. '<td>' . $acts . '</td></tr>';
+			if ($i->message !== '') {
+				$rows .= '<tr class="messagerow"><td colspan="9">' . Html::e($i->message) . '</td></tr>';
 			}
 		}
 		return $rows;
 	}
 
-	private function instanceRow(string $pid, ?Instance $i, ProcessControl $pc, ?int $assignedPort, bool $enabled = true): array
+	/**
+	 * Available panel rows: enabled presets that are not running
+	 * (GUI-DESIGN.md §3 — disabled presets never appear here). "Fits?"
+	 * reuses the Phase 3 admission check against current free memory.
+	 *
+	 * @param iterable<string,Instance> $instances
+	 * @param iterable<string,Preset> $presets
+	 */
+	private function availableRows(iterable $instances, iterable $presets): string
 	{
-		$status = $i?->status ?? Instance::STOPPED;
-		$acts   = '';
-		if ($status === Instance::STOPPED || $status === Instance::ERROR) {
-			// A parked preset offers no Start (ProcessManager would refuse it).
-			if ($enabled) {
-				$acts .= Html::postButton("/presets/{$pid}/start", 'Start');
+		$running = [];
+		foreach ($instances as $i) {
+			if (in_array($i->status, [Instance::LOADING, Instance::READY], true) && $i->allocation !== []) {
+				$running[] = Allocation::fromArray($i->allocation);
 			}
-		} else {
-			$acts .= Html::postButton("/presets/{$pid}/stop", 'Stop')
-				. Html::postButton("/presets/{$pid}/restart", 'Restart');
 		}
-		$acts .= '<a class="btn" href="/presets/' . Html::e($pid) . '/log">Log</a> ';
-		$acts .= Html::postButton("/presets/{$pid}/estimate", 'Estimate');
 
-		$html = '<tr><td><a href="/presets/' . Html::e($pid) . '/edit">' . Html::e($pid) . '</a></td>'
-			. '<td class="status-' . Html::e($status) . '">' . Html::e($status) . '</td>'
-			. '<td>' . ($i !== null && $i->pid > 0 ? Html::e((string)$i->pid) : '-') . '</td>'
-			. '<td>' . Html::e((string)($i?->port ?: ($assignedPort ?? '-'))) . '</td>'
-			. '<td>' . ($i !== null && $i->started_at > 0 ? Html::e(Format::duration(time() - $i->started_at)) : '-') . '</td>'
-			. '<td>' . ($i !== null && $i->allocation !== [] ? Html::e(Format::gb(Allocation::fromArray($i->allocation)->totalBytes())) : '-') . '</td>'
-			. '<td>' . ($i !== null && $i->pid > 0 ? Html::e(Format::gb($pc->rssBytes($i->pid))) : '-') . '</td>'
-			. '<td>' . $acts . '</td></tr>';
-		if ($i !== null && $i->message !== '' && $status === Instance::ERROR) {
-			$html .= '<tr class="messagerow"><td colspan="8">' . Html::e($i->message) . '</td></tr>';
+		$rows = '';
+		foreach ($presets as $pid => $p) {
+			if (!$p->enabled || isset($instances[$pid])) {
+				continue;
+			}
+			[$estCell, $fitsCell] = $this->fitCells($p, $running);
+			$acts = Html::postButton("/presets/{$pid}/start", 'Start')
+				. '<a class="btn" href="/presets/' . Html::e($pid) . '/edit">Edit</a> '
+				. '<a class="btn" href="/presets/new?copy=' . Html::e(rawurlencode((string)$pid)) . '">Duplicate</a>';
+			$rows .= '<tr><td><a href="/presets/' . Html::e($pid) . '/edit">' . Html::e($pid) . '</a></td>'
+				. '<td>' . Html::e($p->model_path !== '' ? basename($p->model_path) : '-') . '</td>'
+				. '<td>' . $this->ctxCell($p) . '</td>'
+				. '<td>' . $estCell . '</td>'
+				. '<td>' . $fitsCell . '</td>'
+				. '<td>' . $acts . '</td></tr>';
 		}
-		return ['html' => $html, 'status' => $status];
+		return $rows;
+	}
+
+	/**
+	 * Estimate + "Fits?" cells for one not-running preset. "?" whenever
+	 * memory cannot be read — macOS has no probe, and a preset with no
+	 * model file cannot be estimated (GUI-DESIGN.md §3).
+	 *
+	 * @param list<Allocation> $running
+	 * @return array{0:string,1:string}
+	 */
+	private function fitCells(Preset $p, array $running): array
+	{
+		if ($p->model_path === '') {
+			return ['-', '?'];
+		}
+		try {
+			$result = $this->app->memory->admit($p, $running);
+		} catch (Throwable) {
+			return ['?', '?'];
+		}
+		$est = Format::gb($this->app->memory->estimate($p)->totalBytes());
+		if ($result->fits) {
+			return [$est, '✓ fits'];
+		}
+		// Biggest per-device gap is what actually blocks the start.
+		$worst = 0;
+		foreach ($result->perBudget as $r) {
+			$worst = max($worst, $r['need'] - $r['available']);
+		}
+		return [$est, '✗ needs ' . Format::gb($worst) . ' more'];
+	}
+
+	/** Text badge per GUI-DESIGN.md §3: wording differs per status, CSS carries fill/outline. */
+	private function badge(string $status): string
+	{
+		$label = match ($status) {
+			Instance::READY   => 'ready',
+			Instance::LOADING => 'loading…',
+			Instance::ERROR   => 'error',
+			default           => $status,
+		};
+		return '<span class="badge badge-' . Html::e($status) . '">' . Html::e($label) . '</span>';
+	}
+
+	/** Ctx column: the configured ctx_size, with the model's trained max when 0 means "model default". */
+	private function ctxCell(?Preset $p): string
+	{
+		if ($p === null) {
+			return '-';
+		}
+		$ctx = $p->args->ctx_size;
+		return (string)($ctx === 0 ? 'model max' : $ctx);
+	}
+
+	/**
+	 * Memory section: totals per budget device plus a stacked bar whose
+	 * segments are the running instances (GUI-DESIGN.md §3 — "why won't
+	 * X start" at a glance). macOS must still render the rest of the
+	 * dashboard, hence the try/catch.
+	 *
+	 * @param iterable<string,Instance> $instances
+	 */
+	private function memorySection(iterable $instances): string
+	{
+		try {
+			$topo  = $this->app->memory->topology();
+			$mem   = '<table><tr><th>Device</th><th>Total</th><th>Available</th><th>Est. in use by LlmChooser</th><th></th></tr>';
+			foreach ($topo->devices as $d) {
+				if ($topo->budgetId($d->id) !== $d->id) {
+					continue; // unified GPUs fold into their budget device
+				}
+				$segs  = '';
+				$inUse = 0;
+				foreach ($instances as $i) {
+					if ($i->allocation === [] || $i->status === Instance::STOPPED) {
+						continue;
+					}
+					$bytes = 0;
+					foreach (Allocation::fromArray($i->allocation)->perDevice as $devId => $b) {
+						if ($topo->budgetId((string)$devId) === $d->id) {
+							$bytes += (int)$b;
+						}
+					}
+					if ($bytes <= 0) {
+						continue;
+					}
+					$inUse += $bytes;
+					$pct   = min(100, $d->totalBytes > 0 ? round($bytes / $d->totalBytes * 100, 2) : 0);
+					$segs .= '<div class="segment' . ($i->status === Instance::LOADING ? ' loading' : '')
+						. '" style="width:' . $pct . '%" title="'
+						. Html::e($i->preset_id . ': ' . Format::gb($bytes)) . '">'
+						. Html::e($i->preset_id) . '</div>';
+				}
+				// Free space: unlabelled remainder segment.
+				$freePct = $d->totalBytes > 0 ? max(0, round(($d->totalBytes - $inUse) / $d->totalBytes * 100, 2)) : 0;
+				$mem .= '<tr><td>' . Html::e($d->id) . '</td>'
+					. '<td>' . Html::e(Format::gb($d->totalBytes)) . '</td>'
+					. '<td>' . Html::e(Format::gb($d->availableBytes)) . '</td>'
+					. '<td>' . Html::e(Format::gb($inUse)) . '</td>'
+					. '<td><div class="membar">' . $segs
+					. '<div class="segment free" style="width:' . $freePct . '%"></div></div></td></tr>';
+			}
+			$mem .= '</table>';
+			if ($topo->isUnified()) {
+				$mem .= '<p>unified memory</p>';
+			}
+			return '<section><h2>Memory</h2>' . $mem . '</section>';
+		} catch (Throwable $e) {
+			return '<section><h2>Memory</h2><p class="flash">Memory info unavailable: ' . Html::e($e->getMessage()) . '</p></section>';
+		}
+	}
+
+	/**
+	 * Header status line (GUI-DESIGN.md §2): "host · N running · RAM
+	 * used/total GB". Empty string when memory cannot be read at all —
+	 * a header that lies is worse than no header.
+	 *
+	 * @param iterable<string,Instance> $instances
+	 */
+	private function headerSummary(iterable $instances): string
+	{
+		$running = 0;
+		foreach ($instances as $i) {
+			if (in_array($i->status, [Instance::LOADING, Instance::READY], true)) {
+				$running++;
+			}
+		}
+		$parts = [gethostname() ?: 'host', $running . ' running'];
+		try {
+			$topo = $this->app->memory->topology();
+			foreach ($topo->devices as $d) {
+				if ($d->id !== 'cpu') {
+					continue;
+				}
+				$used = max(0, $d->totalBytes - $d->availableBytes);
+				$parts[] = 'RAM ' . Format::gb($used) . '/' . Format::gb($d->totalBytes);
+			}
+		} catch (Throwable) {
+			// probe failure: summary keeps host + count only
+		}
+		return implode(' · ', $parts);
 	}
 
 	private function brokenBanner(): string

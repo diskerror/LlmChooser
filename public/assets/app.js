@@ -47,3 +47,54 @@ document.querySelectorAll('form.disable-form[data-running="1"]').forEach(form =>
     if (!confirm('Stop it now?')) e.preventDefault();
   });
 });
+
+// Dashboard auto-refresh (GUI-DESIGN.md §3): poll a server-rendered HTML
+// partial and rewrite the two panel bodies in place. Row markup stays in
+// PHP (one renderer for first paint and every refresh); meta-refresh in
+// the page head remains the no-JS fallback.
+const loadedBody = document.getElementById('loaded-tbody');
+const availableBody = document.getElementById('available-tbody');
+if (loadedBody && availableBody) {
+  setInterval(async () => {
+    try {
+      const res = await fetch('/api/dashboard-panels');
+      if (!res.ok) return;
+      const data = await res.json();
+      // A form the user is mid-click on must not vanish under them.
+      if (!document.activeElement || !document.activeElement.closest('form')) {
+        if (data.loaded_html) {
+          loadedBody.innerHTML = data.loaded_html;
+          bindTestForms(loadedBody);
+        }
+        if (data.available_html) availableBody.innerHTML = data.available_html;
+      }
+    } catch (e) { /* network hiccup: leave the stale table; meta-refresh covers it */ }
+  }, 5000);
+}
+
+// Test button: POST /presets/{id}/test, show the result inline. One real
+// one-token generation per click, never automatic. ttft is really
+// time-to-first-response-byte (the server notes it too).
+function bindTestForms(scope) {
+  scope.querySelectorAll('form.test-form:not([data-bound])').forEach(form => {
+    form.dataset.bound = '1';
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const out = form.parentElement.querySelector('.test-result');
+      const btn = form.querySelector('button');
+      out.textContent = 'testing…';
+      btn.disabled = true;
+      try {
+        const res = await fetch(form.action, { method: 'POST' });
+        const data = await res.json();
+        out.textContent = data.ok
+          ? `ttft ${data.ttft_ms}ms, total ${data.total_ms}ms`
+          : `error: ${data.error}`;
+      } catch (e) {
+        out.textContent = 'request failed';
+      }
+      btn.disabled = false;
+    });
+  });
+}
+bindTestForms(document);

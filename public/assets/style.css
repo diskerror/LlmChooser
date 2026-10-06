@@ -31,6 +31,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 0 1rem 3rem; }
 	padding: .5rem 1rem;
 }
 .topbar .brand { font-weight: 700; text-decoration: none; color: #fff; }
+.topbar .summary { margin-left: auto; font-size: 12px; opacity: .85; }
 .tabs a {
 	display: inline-block;
 	padding: .35rem .9rem;
@@ -198,3 +199,5 @@ meter { width: 12rem; height: 1rem; }
 	background: repeating-linear-gradient(45deg, #9a9a9a, #9a9a9a 4px, #cfcfcf 4px, #cfcfcf 8px);
 	color: var(--fg);
 }
+.membar .segment.free { background: transparent; }
+.test-result { font-size: .9em; color: var(--muted); margin-left: .3rem; }
