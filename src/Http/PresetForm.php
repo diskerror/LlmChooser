@@ -142,7 +142,7 @@ final class PresetForm
 	private static function argField(string $name, mixed $value): string
 	{
 		$type = (new ReflectionProperty(PresetArgs::class, $name))->getType()?->getName() ?? 'string';
-		$help = FieldHints::HELP[$name] ?? '';
+		$help = FieldHints::load()[$name]['short'] ?? '';
 		$help = $help !== '' ? '<small>' . Html::e($help) . '</small>' : '';
 		$n    = 'args[' . Html::e($name) . ']';
 

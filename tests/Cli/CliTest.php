@@ -419,4 +419,68 @@ class CliTest extends TestCase
         $this->assertSame([], $this->runner->calls, 'must not touch systemctl');
         $this->assertFileDoesNotExist($this->dir . '/units/llmchooser-p1.service');
     }
+
+    // ---- Phase 9: help-drift ----
+
+    /** @return array{0:int,1:string,2:string} */
+    private function driftRun(string $capturedPath, array $args): array
+    {
+        $cli = new Cli($this->app, new Output($this->o, $this->e), null, $capturedPath);
+        $rc  = $cli->run($args);
+        return [$rc, $this->out(), $this->err()];
+    }
+
+    private function fakeHelpBinary(string $output): string
+    {
+        $bin = $this->dir . '/fake-llama-help.sh';
+        file_put_contents($bin, "#!/bin/sh\nprintf '%s\\n' " . escapeshellarg($output) . "\n");
+        chmod($bin, 0755);
+        return $bin;
+    }
+
+    public function test_help_drift_no_change(): void
+    {
+        $cap = $this->dir . '/captured.txt';
+        file_put_contents($cap, 'flags: --ctx-size --parallel --seed');
+        $bin = $this->fakeHelpBinary('usage: --ctx-size ... --parallel ... --seed');
+        [$rc, $out] = $this->driftRun($cap, ['help-drift', $bin]);
+        $this->assertSame(0, $rc);
+        $this->assertStringContainsString('No drift', $out);
+    }
+
+    public function test_help_drift_detects_added_flag(): void
+    {
+        $cap = $this->dir . '/captured.txt';
+        file_put_contents($cap, '--ctx-size');
+        $bin = $this->fakeHelpBinary('--ctx-size --new-flag');
+        [$rc, $out] = $this->driftRun($cap, ['help-drift', $bin]);
+        $this->assertSame(1, $rc);
+        $this->assertStringContainsString('+ added:   --new-flag', $out);
+    }
+
+    public function test_help_drift_detects_removed_flag(): void
+    {
+        $cap = $this->dir . '/captured.txt';
+        file_put_contents($cap, '--ctx-size --old-flag');
+        $bin = $this->fakeHelpBinary('--ctx-size');
+        [$rc, $out] = $this->driftRun($cap, ['help-drift', $bin]);
+        $this->assertSame(1, $rc);
+        $this->assertStringContainsString('- removed: --old-flag', $out);
+    }
+
+    public function test_help_drift_missing_binary_path(): void
+    {
+        [$rc, , $err] = $this->driftRun($this->dir . '/captured-missing-anyway.txt', ['help-drift']);
+        $this->assertSame(2, $rc);
+        $this->assertStringContainsString('Missing path to llama-server binary', $err);
+    }
+
+    public function test_help_drift_non_executable_path(): void
+    {
+        $notABin = $this->dir . '/plain.txt';
+        file_put_contents($notABin, 'hello');
+        [$rc, , $err] = $this->driftRun($this->dir . '/captured.txt', ['help-drift', $notABin]);
+        $this->assertSame(1, $rc);
+        $this->assertStringContainsString('Not executable', $err);
+    }
 }

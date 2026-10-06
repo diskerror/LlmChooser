@@ -33,15 +33,27 @@ final class FieldHints
 		'Other'            => ['extra_flags'],
 	];
 
-	public const HELP = [
-		'ctx_size'     => '0 = model default (full trained context)',
-		'n_predict'    => '-1 = no limit',
-		'n_gpu_layers' => "number, 'auto' or 'all'",
-		'tensor_split' => "comma-separated ratios, e.g. 3,1 (multi-GPU only)",
-		'parallel'     => '-1 = auto',
-		'seed'         => '-1 = random',
-		'threads'      => '-1 = auto',
-		'alias'        => 'API model name; empty = preset id',
-		'extra_flags'  => 'anything else, appended to the command line (not --host/--port)',
-	];
+	public const HELP_FILE = __DIR__ . '/../../resources/field_help.json';
+
+	/** @var array<string, array{label:string,flag:string,level:string,upstream_default:string,short:string,full:string}>|null */
+	private static ?array $loaded = null;
+
+	/**
+	 * Compiled field help from resources/field_help.json, generated from
+	 * FIELD-HELP.md by `llmchooser help-compile`. Loaded once per request.
+	 *
+	 * @return array<string, array{label:string,flag:string,level:string,upstream_default:string,short:string,full:string}>
+	 */
+	public static function load(): array
+	{
+		if (self::$loaded === null) {
+			$data = json_decode((string)@file_get_contents(self::HELP_FILE), true);
+			if (!is_array($data)) {
+				throw new \RuntimeException('Cannot read or parse ' . self::HELP_FILE
+					. ' — run: llmchooser help-compile <FIELD-HELP.md>');
+			}
+			self::$loaded = $data;
+		}
+		return self::$loaded;
+	}
 }

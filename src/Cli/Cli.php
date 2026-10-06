@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace LlmChooser\Cli;
 
 use LlmChooser\App;
+use LlmChooser\Http\FieldHelpCompiler;
 use LlmChooser\Memory\Allocation;
 use LlmChooser\Process\AdmissionException;
 use LlmChooser\Process\HealthChecker;
@@ -31,6 +32,8 @@ final class Cli
 	  models                                   list discovered model files
 	  enable  <preset-id>                      allow this preset to be offered/started
 	  disable <preset-id>                      park this preset (stop first if running)
+	  help-compile <FIELD-HELP.md>             write resources/field_help.json
+	  help-drift   <llama-server>              diff --help against the captured copy
 	  set-startup    <preset-id>               start this preset at boot (systemd, needs root)
 	  remove-startup <preset-id>               undo set-startup (needs root)
 	TXT;
@@ -39,6 +42,7 @@ final class Cli
 		private readonly App $app,
 		private readonly Output $out = new Output(),
 		private readonly ?StartupManager $startup = null,
+		private readonly string $capturedHelpPath = __DIR__ . '/../../docs/llama-server-help.txt',
 	) {}
 
 	/** @param list<string> $args  arguments AFTER the script name. Returns exit code. */
@@ -100,6 +104,8 @@ final class Cli
 			'models'  => $this->models(),
 			'enable'  => $this->setEnabled($this->needId($pos), true),
 			'disable' => $this->setEnabled($this->needId($pos), false),
+			'help-compile' => $this->helpCompile($pos),
+			'help-drift'   => $this->helpDrift($pos),
 			'set-startup'    => $this->startupCmd('set', $pos),
 			'remove-startup' => $this->startupCmd('remove', $pos),
 			default => $this->unknown($command),
@@ -219,6 +225,91 @@ final class Cli
 		$this->app->presets->setEnabled($id, $enabled);
 		$this->out->line(($enabled ? 'Enabled ' : 'Disabled ') . $id);
 		return 0;
+	}
+
+	/** FIELD-HELP.md -> resources/field_help.json (see FieldHelpCompiler). */
+	private function helpCompile(array $pos): int
+	{
+		$path = $pos[0] ?? '';
+		if ($path === '') {
+			throw new UsageException('Missing path to FIELD-HELP.md');
+		}
+		$md = @file_get_contents($path);
+		if ($md === false) {
+			$this->out->error("Cannot read {$path}");
+			return 1;
+		}
+		$data  = (new FieldHelpCompiler())->compile($md);
+		$out   = dirname(__DIR__, 2) . '/resources/field_help.json';
+		$json  = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
+		if (file_put_contents($out, $json) === false) {
+			$this->out->error("Cannot write {$out}");
+			return 1;
+		}
+		$this->out->line('Compiled ' . count($data) . ' fields to resources/field_help.json');
+		return 0;
+	}
+
+	/**
+	 * Diff a live llama-server --help against the captured reference copy
+	 * (docs/llama-server-help.txt) and report flags that appeared or
+	 * vanished. Exit 1 on drift so it can gate a rebuild checklist.
+	 *
+	 * @param list<string> $pos
+	 */
+	private function helpDrift(array $pos): int
+	{
+		$binary = $pos[0] ?? '';
+		if ($binary === '') {
+			throw new UsageException('Missing path to llama-server binary');
+		}
+		if (!is_executable($binary)) {
+			$this->out->error("Not executable: {$binary}");
+			return 1;
+		}
+		$captured = @file_get_contents($this->capturedHelpPath);
+		if ($captured === false) {
+			$this->out->error("No captured copy at {$this->capturedHelpPath}. Nothing to diff against.");
+			return 1;
+		}
+
+		$live = shell_exec(escapeshellarg($binary) . ' --help 2>&1');
+		if ($live === null || trim($live) === '') {
+			$this->out->error("Could not run {$binary} --help");
+			return 1;
+		}
+
+		[$added, $removed] = self::diffFlags($captured, (string)$live);
+		if ($added === [] && $removed === []) {
+			$this->out->line('No drift: flags match the captured copy.');
+			return 0;
+		}
+		foreach ($removed as $f) {
+			$this->out->line("- removed: {$f}");
+		}
+		foreach ($added as $f) {
+			$this->out->line("+ added:   {$f}");
+		}
+		$this->out->line('Review FIELD-HELP.md for the flags above, then re-run help-compile.');
+		return 1;
+	}
+
+	/**
+	 * Flag tokens (--long-name) present in one --help text but not the
+	 * other. Long options only: single letters are too ambiguous across
+	 * subcommand docs to diff honestly.
+	 *
+	 * @return array{0:list<string>,1:list<string>} [added, removed]
+	 */
+	public static function diffFlags(string $captured, string $live): array
+	{
+		$extract = static function (string $text): array {
+			preg_match_all('/(--[a-z][a-z0-9-]*)/', $text, $m);
+			return array_unique($m[1]);
+		};
+		$before = $extract($captured);
+		$after  = $extract($live);
+		return [array_values(array_diff($after, $before)), array_values(array_diff($before, $after))];
 	}
 
 	/** @param list<string> $pos @param array<string,string|bool> $opts */
