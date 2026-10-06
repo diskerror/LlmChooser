@@ -347,4 +347,76 @@ class CliTest extends TestCase
         [$rc2, $out2] = $this->cliRun(['health']);
         $this->assertStringContainsString('manual', $out2);
     }
+
+    // ---- Phase 8: enable / disable ----
+
+    public function test_disable_a_stopped_preset(): void
+    {
+        [$rc, $out] = $this->cliRun(['disable', 'p1']);
+        $this->assertSame(0, $rc);
+        $this->assertStringContainsString('Disabled p1', $out);
+        $this->assertFalse($this->app->presets->load('p1')->enabled);
+    }
+
+    public function test_enable_a_disabled_preset(): void
+    {
+        $this->cliRun(['disable', 'p1']);
+        [$rc, $out] = $this->cliRun(['enable', 'p1']);
+        $this->assertSame(0, $rc);
+        $this->assertStringContainsString('Enabled p1', $out);
+        $this->assertTrue($this->app->presets->load('p1')->enabled);
+    }
+
+    public function test_disable_a_running_preset_stops_it_first(): void
+    {
+        [$rc] = $this->cliRun(['start', 'p1', '--wait']);
+        $this->assertSame(0, $rc);
+
+        [$rc2, $out2] = $this->cliRun(['disable', 'p1']);
+        $this->assertSame(0, $rc2);
+        $this->assertStringContainsString('Stopped p1 (was running)', $out2);
+        $this->assertStringContainsString('Disabled p1', $out2);
+        $this->assertFalse($this->app->presets->load('p1')->enabled);
+
+        $i = $this->app->processes->refresh()['p1'] ?? null;
+        $this->assertTrue($i === null || $i->status === Instance::STOPPED);
+    }
+
+    public function test_disable_unknown_preset_fails(): void
+    {
+        [$rc, , $err] = $this->cliRun(['disable', 'ghost']);
+        $this->assertSame(1, $rc);
+        $this->assertStringContainsString('Preset not found', $err);
+    }
+
+    public function test_list_shows_enabled_column(): void
+    {
+        [$rc, $out] = $this->cliRun(['list']);
+        $this->assertSame(0, $rc);
+        $this->assertStringContainsString('ENABLED', $out);
+        $this->assertMatchesRegularExpression('/p1\s+\S*\s+yes/', $out);
+    }
+
+    public function test_list_enabled_filters(): void
+    {
+        $this->cliRun(['disable', 'p1']);
+        rewind($this->o);
+        ftruncate($this->o, 0); // start the list assertion from a clean stream
+        [$rc, $out] = $this->cliRun(['list', '--enabled']);
+        $this->assertSame(0, $rc);
+        $this->assertStringNotContainsString('p1', $out);
+        $this->assertStringContainsString('p2', $out);
+    }
+
+    public function test_set_startup_refuses_disabled_preset(): void
+    {
+        $this->cliRun(['disable', 'p1']);
+        rewind($this->e);
+        ftruncate($this->e, 0);
+        [$rc, , $err] = $this->cliRun(['set-startup', 'p1']);
+        $this->assertSame(1, $rc);
+        $this->assertStringContainsString('disabled', $err);
+        $this->assertSame([], $this->runner->calls, 'must not touch systemctl');
+        $this->assertFileDoesNotExist($this->dir . '/units/llmchooser-p1.service');
+    }
 }

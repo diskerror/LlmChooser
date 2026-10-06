@@ -49,6 +49,9 @@ final class ProcessManager
 		}
 
 		$preset = $this->presets->load($presetId);
+		if (!$preset->enabled) {
+			throw new RuntimeException("Preset '{$presetId}' is disabled. Enable it first.");
+		}
 		$engine = $this->engines->load($preset->engine_id);
 
 		if ($force) {

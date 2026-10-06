@@ -238,4 +238,13 @@ class ProcessManagerTest extends TestCase
             fclose($busy);
         }
     }
+
+    public function test_start_refuses_disabled_preset(): void
+    {
+        $this->presets->setEnabled('p1', false);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessageMatches('/disabled/i');
+        $this->pm->start('p1');
+    }
 }

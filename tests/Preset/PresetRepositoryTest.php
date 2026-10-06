@@ -90,4 +90,37 @@ class PresetRepositoryTest extends TestCase
         $this->expectException(RuntimeException::class);
         $repo->save(new Preset());
     }
+
+    public function test_set_enabled_false_persists(): void
+    {
+        $repo = new PresetRepository($this->dir);
+        $repo->save(new Preset(['id' => 'parked']));
+        $this->assertTrue($repo->load('parked')->enabled); // default
+
+        $repo->setEnabled('parked', false);
+        $this->assertFalse($repo->load('parked')->enabled);
+    }
+
+    public function test_set_enabled_true_persists(): void
+    {
+        $repo = new PresetRepository($this->dir);
+        $repo->save(new Preset(['id' => 'flipped', 'enabled' => false]));
+        $this->assertFalse($repo->load('flipped')->enabled);
+
+        $repo->setEnabled('flipped', true);
+        $this->assertTrue($repo->load('flipped')->enabled);
+    }
+
+    public function test_legacy_file_without_enabled_key_loads_as_enabled(): void
+    {
+        // A preset JSON saved before Phase 8 has no "enabled" key at all.
+        $repo = new PresetRepository($this->dir);
+        file_put_contents($this->dir . '/legacy.json', json_encode([
+            'id'         => 'legacy',
+            'name'       => 'Legacy',
+            'engine_id'  => 'beelink-local',
+            'model_path' => '/models/legacy.gguf',
+        ]));
+        $this->assertTrue($repo->load('legacy')->enabled);
+    }
 }

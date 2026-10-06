@@ -58,7 +58,11 @@ final class StartupManager
 	{
 		// Loading first: a typo'd preset should not install a unit that fails
 		// at boot. It also guarantees the id is a usable slug.
-		$this->app->presets->load($presetId);
+		$preset = $this->app->presets->load($presetId);
+		if (!$preset->enabled) {
+			$this->out->error("Preset '{$presetId}' is disabled. Enable it first.");
+			return 1;
+		}
 
 		$rc = $this->preflight($presetId);
 		if ($rc !== 0) {

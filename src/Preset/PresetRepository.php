@@ -47,6 +47,14 @@ class PresetRepository
         }
     }
 
+    public function setEnabled(string $id, bool $enabled): Preset
+    {
+        $preset = $this->load($id);
+        $preset->enabled = $enabled;
+        $this->save($preset);
+        return $preset;
+    }
+
     public function loadAll(): PresetCollection
     {
         $out = new PresetCollection();

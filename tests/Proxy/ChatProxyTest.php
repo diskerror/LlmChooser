@@ -316,18 +316,46 @@ class ChatProxyTest extends TestCase
 		$this->assertArrayNotHasKey('broken_config', $err);
 	}
 
-	public function test_models_lists_broken_preset(): void
+	public function test_models_excludes_broken_files(): void
 	{
+		// Phase 8: /v1/models is a client-facing offer; an unreadable file
+		// is no longer listed. It still surfaces via the 422/400 paths above.
 		$this->breakPreset();
-		$em   = $this->proxyRun($this->req('GET', '/v1/models'));
+		$em = $this->proxyRun($this->req('GET', '/v1/models'));
 		$this->assertSame(200, $em->code);
 		foreach ($em->json()['data'] as $m) {
-			if ($m['id'] === 'c') {
-				$this->assertSame('error', $m['status']);
-				$this->assertStringContainsString('malformed JSON', $m['error']);
-				return;
-			}
+			$this->assertNotSame('c', $m['id']);
 		}
-		$this->fail('broken preset c missing from /v1/models');
+	}
+
+	// ------------------------------------------------------- Phase 8: enabled
+
+	public function test_models_excludes_disabled_preset(): void
+	{
+		$this->app->presets->setEnabled('b', false);
+		$em = $this->proxyRun($this->req('GET', '/v1/models'));
+		$this->assertSame(200, $em->code);
+		$data = $em->json()['data'];
+		$this->assertCount(1, $data);
+		$this->assertSame('a', $data[0]['preset']);
+	}
+
+	public function test_disabled_preset_named_explicitly_is_404(): void
+	{
+		$this->startReady('a');
+		$this->app->presets->setEnabled('b', false);
+		$em = $this->proxyRun($this->req('POST', '/v1/chat/completions', ['preset' => 'b'], $this->jsonHeaders(), '{}'));
+		$this->assertSame(404, $em->code);
+		$this->assertStringContainsString('disabled', $em->json()['error']['message']);
+	}
+
+	public function test_disabled_preset_no_fallback(): void
+	{
+		// Nothing running at all: naming the disabled preset must still be
+		// the precise 404, not the generic "No preset is running" 400.
+		$this->app->presets->setEnabled('b', false);
+		$em = $this->proxyRun($this->req('POST', '/v1/chat/completions', ['preset' => 'b'], $this->jsonHeaders(), '{}'));
+		$this->assertSame(404, $em->code);
+		$this->assertStringContainsString('disabled', $em->json()['error']['message']);
 	}
 }

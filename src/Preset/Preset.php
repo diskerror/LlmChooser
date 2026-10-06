@@ -10,6 +10,7 @@ class Preset extends TypedClass
 {
 	protected string  $id               = '';
 	protected string  $name             = '';
+	protected bool    $enabled          = true;
 	protected string  $engine_id        = '';
 	protected string  $binary_path      = '';
 	protected string  $model_path       = '';

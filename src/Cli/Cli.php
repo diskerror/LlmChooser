@@ -29,6 +29,8 @@ final class Cli
 	  health  [<preset-id>] [--lines=N]        summary table, or details for one preset
 	  list                                     list presets
 	  models                                   list discovered model files
+	  enable  <preset-id>                      allow this preset to be offered/started
+	  disable <preset-id>                      park this preset (stop first if running)
 	  set-startup    <preset-id>               start this preset at boot (systemd, needs root)
 	  remove-startup <preset-id>               undo set-startup (needs root)
 	TXT;
@@ -81,7 +83,7 @@ final class Cli
 	/** @param array<string,string|bool> $opts @param list<string> $pos */
 	private function dispatch(string $command, array $pos, array $opts): int
 	{
-		$known = ['force', 'wait', 'foreground', 'lines'];
+		$known = ['force', 'wait', 'foreground', 'lines', 'enabled'];
 		foreach (array_keys($opts) as $name) {
 			if (!in_array($name, $known, true)) {
 				throw new UsageException("Unknown option: --{$name}");
@@ -94,8 +96,10 @@ final class Cli
 			'stop'    => $this->stop($this->needId($pos)),
 			'restart' => $this->start($this->needId($pos), $opts, restarting: true),
 			'health'  => $this->health($pos, $opts),
-			'list'    => $this->listPresets(),
+			'list'    => $this->listPresets(isset($opts['enabled'])),
 			'models'  => $this->models(),
+			'enable'  => $this->setEnabled($this->needId($pos), true),
+			'disable' => $this->setEnabled($this->needId($pos), false),
 			'set-startup'    => $this->startupCmd('set', $pos),
 			'remove-startup' => $this->startupCmd('remove', $pos),
 			default => $this->unknown($command),
@@ -199,6 +203,24 @@ final class Cli
 		return 0;
 	}
 
+	/**
+	 * Park or un-park a preset. Disabling stops a running instance first —
+	 * the CLI has no interactive prompt; it reports that it stopped it.
+	 */
+	private function setEnabled(string $id, bool $enabled): int
+	{
+		if (!$enabled) {
+			$i = $this->app->processes->refresh()[$id] ?? null;
+			if ($i !== null && ($i->status === Instance::LOADING || $i->status === Instance::READY)) {
+				$this->app->processes->stop($id);
+				$this->out->line("Stopped {$id} (was running)");
+			}
+		}
+		$this->app->presets->setEnabled($id, $enabled);
+		$this->out->line(($enabled ? 'Enabled ' : 'Disabled ') . $id);
+		return 0;
+	}
+
 	/** @param list<string> $pos @param array<string,string|bool> $opts */
 	private function health(array $pos, array $opts): int
 	{
@@ -296,19 +318,23 @@ final class Cli
 		return 0;
 	}
 
-	private function listPresets(): int
+	private function listPresets(bool $onlyEnabled = false): int
 	{
 		$presets = $this->app->presets->loadAll();
 		$rows = [];
 		foreach ($presets as $p) {
+			if ($onlyEnabled && !$p->enabled) {
+				continue;
+			}
 			$rows[] = [
 				$p->id,
 				$p->name,
+				$p->enabled ? 'yes' : 'no',
 				$p->model_path !== '' ? basename($p->model_path) : '-',
 				$p->assigned_port !== null ? (string)$p->assigned_port : '-',
 			];
 		}
-		$this->out->table(['ID', 'NAME', 'MODEL', 'PORT'], $rows);
+		$this->out->table(['ID', 'NAME', 'ENABLED', 'MODEL', 'PORT'], $rows);
 
 		// exit stays 0: the readable presets really were listed.
 		$this->reportBroken();

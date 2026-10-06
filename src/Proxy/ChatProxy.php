@@ -53,6 +53,16 @@ final class ChatProxy
 			return;
 		}
 
+		// A named preset that exists but is parked gets its own precise 404,
+		// before the generic "not running" checks — "not running" would send
+		// you hunting in the wrong direction. No fallback either: naming a
+		// disabled preset explicitly is an error even if another preset runs.
+		$named = $this->app->presets->loadAll()[$id] ?? null;
+		if ($named !== null && !$named->enabled) {
+			$this->error($out, 404, "Preset '{$id}' is disabled.");
+			return;
+		}
+
 		$inst = $running[$id] ?? null;
 		if ($inst === null || $inst->status === Instance::ERROR) {
 			$this->error($out, 503, "Preset '{$id}' is not running.");
@@ -106,14 +116,21 @@ final class ChatProxy
 		return (is_array($data) && isset($data['model']) && is_string($data['model'])) ? $data['model'] : null;
 	}
 
-	/** @return array<string, Instance> loading or ready instances */
+	/** @return array<string, Instance> loading or ready instances of enabled presets */
 	private function active(InstanceCollection $running): array
 	{
+		$presets = $this->app->presets->loadAll();
 		$out = [];
 		foreach ($running as $id => $i) {
-			if ($i->status === Instance::READY || $i->status === Instance::LOADING) {
-				$out[$id] = $i;
+			if ($i->status !== Instance::READY && $i->status !== Instance::LOADING) {
+				continue;
 			}
+			// Defensive: disable stops first, so finding one running is rare.
+			$p = $presets[$id] ?? null;
+			if ($p !== null && !$p->enabled) {
+				continue;
+			}
+			$out[$id] = $i;
 		}
 		return $out;
 	}
@@ -130,6 +147,10 @@ final class ChatProxy
 	{
 		$data = [];
 		foreach ($this->app->presets->loadAll() as $p) {
+			// A parked preset is not offered to API clients (GUI-DESIGN §4).
+			if (!$p->enabled) {
+				continue;
+			}
 			$data[] = [
 				'id'       => $p->args->alias !== '' ? $p->args->alias : $p->id,
 				'object'   => 'model',
@@ -139,19 +160,10 @@ final class ChatProxy
 			];
 		}
 
-		// Unreadable presets are listed too, with the parse error. Omitting
-		// them is what makes a broken file look like a vanished model.
-		// NOTE: loadAll() above populates broken(); do not reorder.
-		foreach ($this->app->presets->broken() as $f) {
-			$data[] = [
-				'id'       => $f->id,
-				'object'   => 'model',
-				'owned_by' => 'llmchooser',
-				'preset'   => $f->id,
-				'status'   => 'error',
-				'error'    => $f->message(),
-			];
-		}
+		// Broken files are NOT listed here (GUI-DESIGN §4): an entry whose
+		// enabled state cannot even be read has no business being offered.
+		// They still surface on every human-facing surface — CLI stderr,
+		// broken_config on error responses, and the explicit-name 422 below.
 
 		$this->json($out, 200, ['object' => 'list', 'data' => $data]);
 	}
