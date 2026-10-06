@@ -9,6 +9,7 @@ use LlmChooser\Engine\EngineRepository;
 use LlmChooser\Http\FieldHints;
 use LlmChooser\Http\PresetForm;
 use LlmChooser\Http\PresetValidator;
+use LlmChooser\Model\GgufReader;
 use LlmChooser\Model\ModelEntry;
 use LlmChooser\Preset\Preset;
 use LlmChooser\Preset\PresetArgs;
@@ -63,7 +64,7 @@ class PresetFormTest extends TestCase
 		$this->assertStringContainsString('name="args[temp]"', $html);
 		$this->assertMatchesRegularExpression('/<select[^>]*name="args\[flash_attn\]"/', $html);
 		$this->assertStringContainsString('<input type="hidden" name="args[jinja]" value="0">', $html);
-		$this->assertStringContainsString('<input type="checkbox" name="args[jinja]" value="1" checked>', $html);
+		$this->assertMatchesRegularExpression('/<input type="checkbox" name="args\[jinja\]" value="1" checked[^>]*>/', $html);
 		foreach ((new PresetArgs())->getPublicNames() as $name) {
 			$this->assertStringContainsString('name="args[' . $name . ']"', $html, "missing field {$name}");
 		}
@@ -132,5 +133,85 @@ class PresetFormTest extends TestCase
 		]);
 		$this->assertSame([], PresetValidator::validate($ok, $engines, true, $presets));
 		$this->assertNotEmpty(FieldHints::GROUPS);
+	}
+
+	// ---- Phase 10: OPNsense row shape ----
+
+	public function testRenderIncludesHelpTogglePerField(): void
+	{
+		$html  = PresetForm::render(new Preset(['id' => 'p', 'engine_id' => 'e']), $this->models(), true);
+		$count = substr_count($html, 'class="help-toggle"');
+		// every PresetArgs field plus the General fields get one
+		$this->assertGreaterThanOrEqual(count((new PresetArgs())->getPublicNames()), $count);
+	}
+
+	public function testRenderMarksNonDefaultField(): void
+	{
+		$p = new Preset(['id' => 'p', 'engine_id' => 'e', 'args' => ['temp' => 0.3]]);
+		$html = PresetForm::render($p, $this->models(), false);
+		$this->assertMatchesRegularExpression('/<div class="field-row [^"]*non-default[^"]*">(?:(?!field-row).)*args\[temp\]/s', $html);
+	}
+
+	public function testDefaultFieldHasNoDot(): void
+	{
+		$html = PresetForm::render(new Preset(['id' => '', 'engine_id' => 'e']), $this->models(), true);
+		// jinja is true by default; its row must not carry the dot
+		$this->assertMatchesRegularExpression('/<div class="field-row (?:basic|advanced)">(?:(?!field-row).)*?<input type="checkbox" name="args\[jinja\]" value="1" checked[^>]*>/s', $html);
+	}
+
+	public function testRenderTooltipUsesShortText(): void
+	{
+		$short = FieldHints::load()['ctx_size']['short'];
+		$html  = PresetForm::render(new Preset(['id' => 'p', 'engine_id' => 'e']), $this->models(), false);
+		$this->assertStringContainsString('title="' . htmlspecialchars($short, ENT_QUOTES) . '"', $html);
+	}
+
+	public function testRenderFullHelpTextPresentButHidden(): void
+	{
+		$full = FieldHints::load()['ctx_size']['full'];
+		$html = PresetForm::render(new Preset(['id' => 'p', 'engine_id' => 'e']), $this->models(), false);
+		$firstParagraph = htmlspecialchars(explode("\n", $full)[0], ENT_QUOTES);
+		$this->assertStringContainsString('<div class="help" hidden>', $html);
+		$this->assertStringContainsString($firstParagraph, $html);
+		// the real CLI flag is inside the help, not the label
+		$this->assertStringContainsString('<code class="flag">-c, --ctx-size</code>', $html);
+	}
+
+	public function testEnabledCheckboxRendersFirst(): void
+	{
+		$html = PresetForm::render(new Preset(['id' => 'p', 'engine_id' => 'e']), $this->models(), false);
+		$this->assertLessThan(
+			strpos($html, 'name="id"'),
+			strpos($html, 'name="enabled"'),
+			'enabled must come before id in the form'
+		);
+	}
+
+	public function testModelDerivedDefaultShownForCtxZero(): void
+	{
+		// The GGUF fixture carries llama.context_length = 8192; the entry
+		// must be built with its parsed info for the hint to appear.
+		$m    = $this->dir . '/ctx.gguf';
+		GgufFixture::model($m, 'llama', 3000);
+		$info = (new GgufReader())->read($m);
+		$entry = new ModelEntry($m, 'ctx', 3000, [$m], ['mmproj' => [], 'draft' => [], 'ngrams' => []], $info, null);
+
+		$p    = new Preset(['id' => 'p', 'engine_id' => 'e', 'model_path' => $m]);
+		$html = PresetForm::render($p, [$entry], false);
+		$this->assertStringContainsString('default model: 8192', $html);
+	}
+
+	public function testToolbarSwitchesRender(): void
+	{
+		$html = PresetForm::render(new Preset(['id' => 'p', 'engine_id' => 'e']), $this->models(), false);
+		$this->assertStringContainsString('id="advanced-toggle"', $html);
+		$this->assertStringContainsString('id="full-help-toggle"', $html);
+	}
+
+	public function testSaveAndRestartOnlyWhenRunning(): void
+	{
+		$p = new Preset(['id' => 'p', 'engine_id' => 'e']);
+		$this->assertStringNotContainsString('save_restart', PresetForm::render($p, $this->models(), false));
+		$this->assertStringContainsString('save_restart', PresetForm::render($p, $this->models(), false, [], true));
 	}
 }

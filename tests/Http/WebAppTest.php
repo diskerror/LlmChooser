@@ -270,4 +270,106 @@ class WebAppTest extends TestCase
 		// the malformed file is never touched
 		$this->assertSame('{nope', file_get_contents($this->dir . '/storage/presets/bad.json'));
 	}
+
+	// ---- Phase 10: enabled switch on the Presets tab ----
+
+	public function testPresetListShowsEnableToggle(): void
+	{
+		$res = $this->get('/presets');
+		$this->assertStringContainsString('/presets/p1/disable', $res->body);
+		$this->assertStringContainsString('Disable', $res->body);
+	}
+
+	public function testDisableRouteDisablesAndRedirects(): void
+	{
+		$res = $this->post('/presets/p1/disable');
+		$this->assertSame(303, $res->status);
+		$this->assertStringStartsWith('/presets?msg=', $res->headers['Location']);
+		$this->assertFalse($this->app->presets->load('p1')->enabled);
+	}
+
+	public function testDisableRouteStopsRunningPresetFirst(): void
+	{
+		$this->post('/presets/p1/start');
+		$this->app->processes->waitUntilReady('p1', 30);
+
+		$res = $this->post('/presets/p1/disable');
+		$this->assertSame(303, $res->status);
+		$this->assertStringContainsString('was%20running', $res->headers['Location']);
+		$this->assertNull($this->app->state->get('p1'));
+		$this->assertFalse($this->app->presets->load('p1')->enabled);
+	}
+
+	public function testEnableRouteEnables(): void
+	{
+		$this->post('/presets/p1/disable');
+		$res = $this->post('/presets/p1/enable');
+		$this->assertSame(303, $res->status);
+		$this->assertTrue($this->app->presets->load('p1')->enabled);
+	}
+
+	public function testDisabledRowsSortedLast(): void
+	{
+		$this->app->presets->setEnabled('p1', false);
+		$body = $this->get('/presets')->body;
+		$posP2 = strpos($body, '/presets/p2/edit');
+		$posP1 = strpos($body, '/presets/p1/edit');
+		$this->assertLessThan($posP1, $posP2, 'disabled p1 must render after enabled p2');
+		$this->assertStringContainsString('class="disabled-row"', $body);
+	}
+
+	public function testDashboardHidesStartForDisabledStoppedPreset(): void
+	{
+		$this->app->presets->setEnabled('p1', false);
+		$body = $this->get('/')->body;
+		$this->assertStringNotContainsString('/presets/p1/start', $body);
+		$this->assertStringContainsString('/presets/p2/start', $body);
+	}
+
+	public function testRunningPresetRowHasDisableConfirmForm(): void
+	{
+		$this->post('/presets/p1/start');
+		$this->app->processes->waitUntilReady('p1', 30);
+		$body = $this->get('/presets')->body;
+		$this->assertStringContainsString('disable-form', $body);
+		$this->assertStringContainsString('data-running="1"', $body);
+		// Delete must not be offered while running.
+		$this->assertStringNotContainsString('/presets/p1/delete', $body);
+	}
+
+	public function testTabStripMarksActiveTab(): void
+	{
+		$this->assertStringContainsString('href="/presets" class="active"', $this->get('/presets')->body);
+		$this->assertStringContainsString('href="/" class="active"', $this->get('/')->body);
+		$this->assertStringContainsString('href="/models" class="active"', $this->get('/models')->body);
+		// a preset edit page belongs to the Presets tab
+		$this->assertStringContainsString('href="/presets" class="active"', $this->get('/presets/p1/edit')->body);
+	}
+
+	public function testAppJsRoute(): void
+	{
+		$res = $this->get('/assets/app.js');
+		$this->assertSame(200, $res->status);
+		$this->assertStringContainsString('text/javascript', $res->headers['Content-Type']);
+	}
+
+	public function testEditFormPostsEnabledAndKeepsItOnPartialPost(): void
+	{
+		$body = $this->get('/presets/p1/edit')->body;
+		$this->assertStringContainsString('name="enabled"', $body);
+
+		// a POST that omits enabled (older client) must not park the preset
+		$this->post('/presets/p1/edit', [
+			'id' => 'p1', 'name' => 'ONE', 'engine_id' => 'e',
+			'model_path' => $this->dir . '/models/m.gguf',
+		]);
+		$this->assertTrue($this->app->presets->load('p1')->enabled);
+
+		// posting enabled=0 does park it
+		$this->post('/presets/p1/edit', [
+			'id' => 'p1', 'name' => 'ONE', 'enabled' => '0', 'engine_id' => 'e',
+			'model_path' => $this->dir . '/models/m.gguf',
+		]);
+		$this->assertFalse($this->app->presets->load('p1')->enabled);
+	}
 }

@@ -1,107 +1,200 @@
+/* Grayscale palette, GUI-DESIGN.md §6. Dark mode is out of scope; the
+   colours are variables so it can be added later. No colour carries
+   state alone — text, icons, fill/outline, weight and dashes do. */
 :root {
-	--fg: #1c1e21;
-	--line: #d5d8dd;
-	--bg-soft: #f6f7f9;
-	--accent: #2456a6;
-	--ready: #1a7f37;
-	--loading: #b58105;
-	--error: #b3261e;
-	--stopped: #6b7280;
+	--header: #2b2b2b;
+	--tab: #d0d0d0;
+	--tab-active: #ffffff;
+	--bg: #f4f4f4;
+	--panel: #ffffff;
+	--line: #cfcfcf;
+	--bar: #e4e4e4;
+	--fg: #1e1e1e;
+	--muted: #6b6b6b;
 }
 * { box-sizing: border-box; }
 body {
-	font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+	font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 	color: var(--fg);
-	margin: 0 auto;
-	max-width: 1100px;
-	padding: 0 1rem 3rem;
+	background: var(--bg);
+	margin: 0;
 }
-header {
+main { max-width: 1100px; margin: 0 auto; padding: 0 1rem 3rem; }
+
+/* ---- header + tabs ---- */
+.topbar {
 	display: flex;
-	justify-content: space-between;
-	align-items: baseline;
-	border-bottom: 2px solid var(--line);
-	margin-bottom: 1rem;
-	padding: .75rem 0;
+	align-items: center;
+	gap: 1.5rem;
+	background: var(--header);
+	color: #fff;
+	padding: .5rem 1rem;
 }
-.brand { font-weight: 700; text-decoration: none; color: var(--fg); }
-nav a { margin-left: 1rem; color: var(--accent); }
-h1 { font-size: 1.5rem; margin: .5rem 0; }
-h2 { font-size: 1.1rem; margin: 1.25rem 0 .5rem; }
-table { border-collapse: collapse; width: 100%; margin: .5rem 0 1.25rem; }
-th, td { border: 1px solid var(--line); padding: .35rem .5rem; text-align: left; vertical-align: top; }
-th { background: var(--bg-soft); }
+.topbar .brand { font-weight: 700; text-decoration: none; color: #fff; }
+.tabs a {
+	display: inline-block;
+	padding: .35rem .9rem;
+	background: var(--tab);
+	color: var(--fg);
+	text-decoration: none;
+	border: 1px solid var(--line);
+	border-bottom: none;
+}
+.tabs a.active { background: var(--tab-active); font-weight: 600; }
+
+/* ---- panels, tables ---- */
+section, .broken, ul.errors {
+	background: var(--panel);
+	border: 1px solid var(--line);
+	margin: .75rem 0;
+	padding: .5rem .75rem;
+}
+h1 { font-size: 1.35rem; margin: .75rem 0 .25rem; }
+h2 { font-size: 1.05rem; margin: 1rem 0 .5rem; }
+table { border-collapse: collapse; width: 100%; margin: .5rem 0; }
+th, td { border: 1px solid var(--line); padding: .3rem .5rem; text-align: left; vertical-align: top; }
+th { background: var(--bar); }
+tbody tr:nth-child(even), tr:nth-child(even) { background: #fafafa; }
+
 .flash {
-	background: #fff8dc;
-	border: 1px solid #e6d9a8;
-	padding: .5rem .75rem;
-	border-radius: 4px;
+	background: var(--panel);
+	border: 1px solid var(--line);
+	border-left: 4px solid var(--fg);
+	padding: .4rem .75rem;
 }
-.broken {
-	background: #fdecea;
-	border: 1px solid #f5c6c2;
-	padding: .5rem .75rem;
-	border-radius: 4px;
+.broken { border-left: 4px solid var(--fg); font-weight: 600; }
+ul.errors {
+	border: none;
+	border-left: 4px solid var(--fg);
+	list-style: none;
+	padding: .4rem .75rem .4rem 1rem;
 	margin: .5rem 0;
 }
-ul.errors {
-	background: #fdecea;
-	border: 1px solid #f5c6c2;
-	list-style: none;
-	padding: .5rem .75rem .5rem 1.25rem;
-	border-radius: 4px;
+ul.errors li::before { content: "⚠ "; }
+
+/* ---- status badges: text + fill/outline/weight, never colour alone ---- */
+.badge {
+	display: inline-block;
+	padding: .1rem .5rem;
+	border: 1px solid var(--fg);
+	font-size: 12px;
 }
+.badge-ready    { background: var(--fg); color: #fff; }
+.badge-loading  { border-style: solid; animation: pulse 1.5s infinite; }
+.badge-error    { background: var(--fg); color: #fff; font-weight: 700; }
+.badge-error::before    { content: "⚠ "; }
+.badge-unhealthy{ border-style: dashed; }
+.badge-unhealthy::before{ content: "⚠ "; }
+@keyframes pulse { 50% { opacity: .45; } }
+/* legacy status cells on the old dashboard keep readable text weight */
+.status-ready   { font-weight: 700; }
+.status-loading { font-style: italic; }
+.status-error   { font-weight: 700; }
+.status-stopped { color: var(--muted); }
+.messagerow td { font-size: .9em; color: var(--muted); }
+
+/* ---- disabled rows ---- */
+.disabled-row { opacity: .55; }
+.disabled-row td:first-child a, .disabled-row td:nth-child(2) a { font-style: italic; }
+
+/* ---- buttons ---- */
 .inline { display: inline; }
 button, .btn {
-	background: var(--bg-soft);
+	background: var(--panel);
 	border: 1px solid var(--line);
-	border-radius: 4px;
 	color: var(--fg);
 	cursor: pointer;
 	display: inline-block;
 	font: inherit;
-	padding: .25rem .6rem;
+	padding: .2rem .6rem;
 	text-decoration: none;
 }
-button:hover, .btn:hover { border-color: var(--accent); }
-button.primary, .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-button.danger { color: var(--error); }
-.status-ready   { color: var(--ready); font-weight: 600; }
-.status-loading { color: var(--loading); font-weight: 600; }
-.status-error   { color: var(--error); font-weight: 600; }
-.status-stopped { color: var(--stopped); }
-.messagerow td { color: var(--error); font-size: .9em; }
+button:hover, .btn:hover { border-color: var(--fg); }
+button:focus-visible, .btn:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+	outline: 2px solid #000;
+	outline-offset: 1px;
+}
+button.primary, .btn.primary { background: var(--fg); border-color: var(--fg); color: #fff; font-weight: 600; }
+button.danger { font-weight: 600; text-decoration: underline; }
+
+/* ---- forms: one field per row (GUI-DESIGN.md §4) ---- */
 form { margin: 0; }
-label {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: .5rem;
-	margin: .3rem 0;
+.form-toolbar { display: flex; gap: 1.5rem; justify-content: flex-end; padding: .25rem 0; }
+.form-toolbar label { flex-direction: row; margin: 0; }
+details {
+	background: var(--panel);
+	border: 1px solid var(--line);
+	margin: .5rem 0;
 }
-label > small { color: var(--stopped); flex-basis: 100%; margin-left: 12.5rem; font-size: .8em; }
+details > summary {
+	background: var(--bar);
+	font-weight: 600;
+	padding: .35rem .6rem;
+	cursor: pointer;
+	list-style-position: inside;
+}
+.field-row {
+	display: grid;
+	grid-template-columns: 14rem 1fr;
+	gap: .75rem;
+	padding: .35rem .6rem;
+	border-top: 1px solid var(--line);
+}
+details > .field-row:first-of-type { border-top: none; }
+.field-label { display: flex; align-items: baseline; gap: .25rem; margin: 0; }
+.dot { font-size: .9em; }
+.control { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.control .default { color: var(--muted); font-size: .85em; }
+.field-error {
+	flex-basis: 100%;
+	border-left: 4px solid var(--fg);
+	padding: .15rem .5rem;
+	font-size: .9em;
+}
+.help {
+	flex-basis: 100%;
+	background: var(--bar);
+	padding: .35rem .6rem;
+	font-size: .9em;
+	white-space: normal;
+}
+.help .flag { background: var(--panel); border: 1px solid var(--line); padding: 0 .25rem; }
+.help-toggle {
+	border: none;
+	background: none;
+	cursor: pointer;
+	font-size: 1em;
+	padding: 0 .1rem;
+	color: var(--muted);
+	vertical-align: baseline;
+}
+.help-toggle:hover { color: var(--fg); }
 input[type=text], input[type=number], textarea, select {
-	flex: 1;
-	min-width: 8rem;
-	max-width: 32rem;
 	font: inherit;
-	padding: .25rem .4rem;
+	padding: .2rem .4rem;
 	border: 1px solid var(--line);
-	border-radius: 4px;
+	background: var(--panel);
+	max-width: 32rem;
+	min-width: 8rem;
+	flex: 1;
 }
-input[readonly] { background: var(--bg-soft); }
-input[type=checkbox] { flex: 0; max-width: none; }
-fieldset { border: 1px solid var(--line); border-radius: 4px; margin: .75rem 0; }
-legend { font-weight: 600; padding: 0 .4rem; }
+input[readonly] { background: var(--bar); }
+input[type=checkbox] { flex: 0; max-width: none; min-width: 0; }
+.form-actions { margin: 1rem 0; }
+
 pre {
-	background: var(--bg-soft);
+	background: var(--panel);
 	border: 1px solid var(--line);
-	border-radius: 4px;
 	overflow-x: auto;
 	padding: .5rem .75rem;
 }
 pre.log { white-space: pre-wrap; }
 meter { width: 12rem; height: 1rem; }
-@media (min-width: 900px) {
-	main > form > fieldset { display: inline-block; vertical-align: top; width: 48%; }
+
+/* memory bar segments (Phase 11 renders these; classes live here) */
+.membar { display: flex; height: 1.1rem; border: 1px solid var(--line); background: var(--panel); }
+.membar .segment { background: #9a9a9a; color: #fff; font-size: 11px; overflow: hidden; white-space: nowrap; }
+.membar .segment.loading {
+	background: repeating-linear-gradient(45deg, #9a9a9a, #9a9a9a 4px, #cfcfcf 4px, #cfcfcf 8px);
+	color: var(--fg);
 }
