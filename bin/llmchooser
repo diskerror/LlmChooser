@@ -10,8 +10,8 @@ use LlmChooser\Cli\Cli;
 use LlmChooser\Cli\Output;
 use LlmChooser\Cli\StartupManager;
 
-if (PHP_VERSION_ID < 80400) {
-	fwrite(STDERR, 'llmchooser needs PHP >= 8.4 (this is ' . PHP_VERSION . ")\n");
+if (PHP_VERSION_ID < 80100) {
+	fwrite(STDERR, 'llmchooser needs PHP >= 8.1 (this is ' . PHP_VERSION . ")\n");
 	exit(1);
 }
 
