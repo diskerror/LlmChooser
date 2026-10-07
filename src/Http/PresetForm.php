@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace LlmChooser\Http;
 
 use LlmChooser\Cli\Format;
+use LlmChooser\Engine\EngineCollection;
 use LlmChooser\Model\ModelEntry;
 use LlmChooser\Preset\Preset;
 use LlmChooser\Preset\PresetArgs;
@@ -23,7 +24,7 @@ final class PresetForm
 	 * @param list<ModelEntry> $models
 	 * @param array<string,string> $errors field ('args.x' for args) => message
 	 */
-	public static function render(Preset $p, array $models, bool $isNew, array $errors = [], bool $running = false): string
+	public static function render(Preset $p, array $models, bool $isNew, array $errors = [], bool $running = false, ?EngineCollection $engines = null): string
 	{
 		$action = $isNew ? '/presets/new' : '/presets/' . Html::e($p->id) . '/edit';
 		$help   = FieldHints::load();
@@ -65,7 +66,7 @@ final class PresetForm
 			$p->id, $defaults->id, $help, self::err($errors, 'id'));
 		$out .= self::fieldRow('name', self::textInput('name', $p->name, $help),
 			$p->name, $defaults->name, $help, self::err($errors, 'name'));
-		$out .= self::fieldRow('engine_id', self::textInput('engine_id', $p->engine_id, $help, ['required']),
+		$out .= self::fieldRow('engine_id', self::enginePicker($p, $engines, $help),
 			$p->engine_id, $defaults->engine_id, $help, self::err($errors, 'engine_id'));
 		$out .= self::fieldRow('binary_path', self::textInput('binary_path', $p->binary_path, $help, ['placeholder' => 'engine default']),
 			$p->binary_path, $defaults->binary_path, $help, self::err($errors, 'binary_path'));
@@ -243,6 +244,33 @@ final class PresetForm
 	{
 		return '<input type="hidden" name="' . Html::e($name) . '" value="0">'
 			. '<input type="checkbox" name="' . Html::e($name) . '" value="1"' . ($checked ? ' checked' : '') . '>';
+	}
+
+	/** Hidden input + button that opens a <dialog> popup listing engine names only (per GUI-DESIGN.md §4 picker). @param array<string,array<string,string>> $help */
+	private static function enginePicker(Preset $p, ?EngineCollection $engines, array $help): string
+	{
+		$current = $p->engine_id;
+		$list    = '';
+		if ($engines !== null) {
+			foreach ($engines as $eid => $e) {
+				$list .= '<li><button type="button" class="engine-pick" data-engine-id="' . Html::e((string)$eid) . '">'
+					. Html::e($e->name !== '' ? $e->name : (string)$eid) . '</button></li>';
+			}
+		}
+		$label = $current;
+		if ($engines !== null && $current !== '' && isset($engines[$current])) {
+			$label = $engines[$current]->name !== '' ? $engines[$current]->name : $current;
+		}
+
+		return '<input type="hidden" name="engine_id" id="engine_id" value="' . Html::e($current) . '">'
+			. '<button type="button" class="engine-picker-open" data-target="engine-picker-dialog"' . self::title($help, 'engine_id') . '>'
+			. '<span class="engine-picker-label">' . ($label !== '' ? Html::e($label) : 'Choose engine…') . '</span>'
+			. '</button>'
+			. '<dialog id="engine-picker-dialog" class="engine-picker-dialog">'
+			. '<h3>Choose an engine</h3>'
+			. '<ul class="engine-picker-list">' . ($list !== '' ? $list : '<li class="muted">No engines yet. <a href="/engines/new">Create one</a>.</li>') . '</ul>'
+			. '<button type="button" class="engine-picker-close">Cancel</button>'
+			. '</dialog>';
 	}
 
 	/** @param list<ModelEntry> $models @param array<string,array<string,string>> $help */

@@ -33,18 +33,19 @@ class WebAppTest extends TestCase
 	protected function setUp(): void
 	{
 		$this->dir = sys_get_temp_dir() . '/llmchooser-web-' . uniqid('', true);
-		mkdir($this->dir . '/config/engines', 0775, true);
+		mkdir($this->dir . '/storage/engines', 0775, true);
 		mkdir($this->dir . '/storage/presets', 0775, true);
 
 		$bin = FakeServer::makeBinary($this->dir . '/bin');
 		GgufFixture::model($this->dir . '/models/m.gguf', 'llama', 3000);
 
-		$engines = new EngineRepository($this->dir . '/config/engines');
+		$engines = new EngineRepository($this->dir . '/storage/engines');
 		$engines->save(new Engine([
 			'id' => 'e',
 			'name' => 'E',
 			'host' => '127.0.0.1',
 			'binary_path_default' => $bin,
+			'model_dir' => $this->dir . '/models',
 			'port_range' => ['min' => 5880, 'max' => 5889],
 		]));
 
@@ -57,11 +58,6 @@ class WebAppTest extends TestCase
 				'model_path' => $this->dir . '/models/m.gguf',
 			]));
 		}
-
-		file_put_contents($this->dir . '/config/model_roots.json', json_encode([
-			'roots' => [$this->dir . '/models'],
-			'cache_file' => 'storage/model_cache.json',
-		]));
 
 		$this->app = $this->makeApp(100);
 		$this->web = new WebApp($this->app);
@@ -605,5 +601,141 @@ class WebAppTest extends TestCase
 		$body = $this->get('/models')->body;
 		$this->assertStringContainsString('badge-error', $body);
 		$this->assertStringContainsString('broken', $body);
+	}
+
+	// ---- Engines tab ----
+
+	public function testEnginesListShowsSeededEngineAndInUse(): void
+	{
+		$body = $this->get('/engines')->body;
+		$this->assertSame(200, $this->get('/engines')->status);
+		$this->assertStringContainsString('/engines/e/edit', $body);
+		$this->assertStringContainsString('<th>in use</th>', $body);
+		// p1 and p2 both reference engine 'e'
+		$this->assertStringContainsString('p1', $body);
+		$this->assertStringContainsString('p2', $body);
+	}
+
+	public function testEnginesListOffersDuplicateAndNew(): void
+	{
+		$body = $this->get('/engines')->body;
+		$this->assertStringContainsString('/engines/new', $body);
+		$this->assertStringContainsString('/engines/new?copy=e', $body);
+	}
+
+	public function testEngineNewForm(): void
+	{
+		$res = $this->get('/engines/new');
+		$this->assertSame(200, $res->status);
+		$this->assertStringContainsString('name="binary_path_default"', $res->body);
+		$this->assertStringContainsString('name="model_dir"', $res->body);
+	}
+
+	public function testEngineNewFormPrefillsFromCopy(): void
+	{
+		$body = $this->get('/engines/new', ['copy' => 'e'])->body;
+		$this->assertStringContainsString('value="e-copy"', $body);
+		$this->assertStringContainsString('value="' . htmlspecialchars((string)$this->app->engines->load('e')->binary_path_default, ENT_QUOTES) . '"', $body);
+		$this->assertStringContainsString('value="' . htmlspecialchars($this->dir . '/models', ENT_QUOTES) . '"', $body);
+	}
+
+	public function testCreateEngine(): void
+	{
+		$res = $this->post('/engines/new', [
+			'id' => 'e2', 'name' => 'E2', 'binary_path_default' => '/bin/llama-server',
+			'model_dir' => $this->dir . '/models', 'host' => '127.0.0.1',
+			'port_min' => '5990', 'port_max' => '5999',
+		]);
+		$this->assertSame(303, $res->status);
+		$this->assertStringStartsWith('/engines?msg=', $res->headers['Location']);
+		$loaded = $this->app->engines->load('e2');
+		$this->assertSame('E2', $loaded->name);
+		$this->assertSame($this->dir . '/models', $loaded->model_dir);
+	}
+
+	public function testCreateEngineDuplicateIdIs422(): void
+	{
+		$res = $this->post('/engines/new', [
+			'id' => 'e', 'name' => 'Dup', 'binary_path_default' => '/bin/llama-server',
+			'host' => '127.0.0.1', 'port_min' => '6000', 'port_max' => '6010',
+		]);
+		$this->assertSame(422, $res->status);
+		$this->assertStringContainsString('Already exists', $res->body);
+	}
+
+	public function testCreateEngineMissingRequiredFieldsIs422(): void
+	{
+		$res = $this->post('/engines/new', ['id' => 'e3']);
+		$this->assertSame(422, $res->status);
+		$this->assertStringContainsString('Required', $res->body);
+	}
+
+	public function testEngineEditForm(): void
+	{
+		$body = $this->get('/engines/e/edit')->body;
+		$this->assertSame(200, $this->get('/engines/e/edit')->status);
+		$this->assertStringContainsString('value="e"', $body);
+		$this->assertStringContainsString('readonly', $body); // id locked after creation
+	}
+
+	public function testEngineEditNotFound(): void
+	{
+		$this->assertSame(404, $this->get('/engines/ghost/edit')->status);
+	}
+
+	public function testEngineSaveUpdatesFieldsAndKeepsId(): void
+	{
+		$res = $this->post('/engines/e/edit', [
+			'id' => 'IGNORED', 'name' => 'E renamed', 'binary_path_default' => '/bin/llama-server',
+			'model_dir' => $this->dir . '/models2', 'host' => '127.0.0.1',
+			'port_min' => '5880', 'port_max' => '5889',
+		]);
+		$this->assertSame(303, $res->status);
+		$after = $this->app->engines->load('e');
+		$this->assertSame('e', $after->id); // never renamed
+		$this->assertSame('E renamed', $after->name);
+		$this->assertSame($this->dir . '/models2', $after->model_dir);
+	}
+
+	public function testEngineSaveValidationFailureIs422(): void
+	{
+		$res = $this->post('/engines/e/edit', [
+			'id' => 'e', 'name' => '', 'binary_path_default' => '/bin/llama-server',
+			'host' => '127.0.0.1', 'port_min' => '5880', 'port_max' => '5889',
+		]);
+		$this->assertSame(422, $res->status);
+		$this->assertStringContainsString('Required', $res->body);
+	}
+
+	public function testEngineDeleteRefusedWhileInUse(): void
+	{
+		$res = $this->post('/engines/e/delete');
+		$this->assertStringContainsString('In%20use%20by', $res->headers['Location']);
+		$this->assertFileExists($this->dir . '/storage/engines/e.json');
+	}
+
+	public function testEngineDeleteSucceedsWhenUnused(): void
+	{
+		$this->post('/engines/new', [
+			'id' => 'unused', 'name' => 'Unused', 'binary_path_default' => '/bin/llama-server',
+			'host' => '127.0.0.1', 'port_min' => '6100', 'port_max' => '6110',
+		]);
+		$res = $this->post('/engines/unused/delete');
+		$this->assertStringContainsString('Deleted', $res->headers['Location']);
+		$this->assertFileDoesNotExist($this->dir . '/storage/engines/unused.json');
+	}
+
+	public function testPresetFormHasEnginePickerDialog(): void
+	{
+		$body = $this->get('/presets/new')->body;
+		$this->assertStringContainsString('engine-picker-dialog', $body);
+		$this->assertStringContainsString('class="engine-pick" data-engine-id="e"', $body);
+		$this->assertStringContainsString('<input type="hidden" name="engine_id" id="engine_id"', $body);
+	}
+
+	public function testTabStripIncludesEngines(): void
+	{
+		$this->assertStringContainsString('href="/engines" class="active"', $this->get('/engines')->body);
+		$this->assertStringNotContainsString('href="/engines" class="active"', $this->get('/models')->body);
 	}
 }

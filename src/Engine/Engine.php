@@ -11,6 +11,7 @@ class Engine extends TypedClass
 	protected string    $id                  = '';
 	protected string    $name                = '';
 	protected string    $binary_path_default = '';
+	protected string    $model_dir           = '';
 	protected string    $host                = '127.0.0.1';
 
 	// protected, NOT public: a nested TypedMinMax only gets its coercion when

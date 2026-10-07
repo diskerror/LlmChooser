@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace LlmChooser\Model;
 
 use FilesystemIterator;
+use LlmChooser\Engine\EngineCollection;
 use RecursiveCallbackFilterIterator;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -32,13 +33,21 @@ final class ModelScanner
 		$this->cacheFile = $cacheFile;
 	}
 
-	public static function fromConfig(ModelRootsConfig $c, string $projectRoot): self
+	/**
+	 * Build a scanner from the union of every engine's model_dir — engines
+	 * are the single source of truth for where to look for models (no
+	 * separate model-roots config). Engines with an empty model_dir
+	 * contribute nothing; duplicates collapse.
+	 */
+	public static function fromEngines(EngineCollection $engines, string $cacheFile): self
 	{
-		$cacheFile = $c->cache_file;
-		if (!str_starts_with($cacheFile, '/')) {
-			$cacheFile = rtrim($projectRoot, '/') . '/' . $cacheFile;
+		$roots = [];
+		foreach ($engines as $engine) {
+			if ($engine->model_dir !== '') {
+				$roots[$engine->model_dir] = true;
+			}
 		}
-		return new self($c->roots->toArray(), $cacheFile);
+		return new self(array_keys($roots), $cacheFile);
 	}
 
 	/** @return list<ModelEntry> */

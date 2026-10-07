@@ -6,6 +6,7 @@ namespace LlmChooser\Http;
 
 use LlmChooser\App;
 use LlmChooser\Cli\Format;
+use LlmChooser\Engine\Engine;
 use LlmChooser\Memory\Allocation;
 use LlmChooser\Memory\MemoryEstimator;
 use LlmChooser\Model\GgufInfo;
@@ -61,6 +62,12 @@ final class WebApp
 		$rt->add('POST', '/presets/{id}/test', fn(Request $r, array $p): Response => $this->test($p['id']));
 		$rt->add('GET', '/presets/{id}/log', fn(Request $r, array $p): Response => $this->log($r, $p['id']));
 		$rt->add('GET', '/models', fn(Request $r): Response => $this->models($r));
+		$rt->add('GET', '/engines', fn(Request $r): Response => $this->engineList($r));
+		$rt->add('GET', '/engines/new', fn(Request $r): Response => $this->engineNew($r));
+		$rt->add('POST', '/engines/new', fn(Request $r): Response => $this->engineCreate($r));
+		$rt->add('GET', '/engines/{id}/edit', fn(Request $r, array $p): Response => $this->engineEdit($r, $p['id']));
+		$rt->add('POST', '/engines/{id}/edit', fn(Request $r, array $p): Response => $this->engineSave($r, $p['id']));
+		$rt->add('POST', '/engines/{id}/delete', fn(Request $r, array $p): Response => $this->engineDelete($p['id']));
 		$rt->add('GET', '/health', fn(Request $r): Response => Response::json(['status' => 'ok']));
 		$rt->add('GET', '/api/status', fn(Request $r): Response => $this->apiStatus());
 		$rt->add('GET', '/api/dashboard-panels', fn(Request $r): Response => $this->apiDashboardPanels());
@@ -225,7 +232,7 @@ final class WebApp
 			}
 		}
 
-		return Response::html(Html::page('New preset', PresetForm::render($preset, $models, true), $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all())));
+		return Response::html(Html::page('New preset', PresetForm::render($preset, $models, true, [], false, $this->app->engines->loadAll()), $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all())));
 	}
 
 	/**
@@ -269,7 +276,7 @@ final class WebApp
 		$errors = PresetValidator::validate($preset, $this->app->engines, true, $this->app->presets);
 		if ($errors !== []) {
 			return Response::html(
-				Html::page('New preset', PresetForm::render($preset, $this->app->modelScanner()->scan(), true, $errors), '', '', $r->path, $this->headerSummary($this->app->state->all())),
+				Html::page('New preset', PresetForm::render($preset, $this->app->modelScanner()->scan(), true, $errors, false, $this->app->engines->loadAll()), '', '', $r->path, $this->headerSummary($this->app->state->all())),
 				422
 			);
 		}
@@ -286,7 +293,7 @@ final class WebApp
 		}
 		$running = $this->instanceIsLive($id);
 		return Response::html(
-			Html::page('Edit ' . $id, PresetForm::render($preset, $this->app->modelScanner()->scan(), false, [], $running), $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all()))
+			Html::page('Edit ' . $id, PresetForm::render($preset, $this->app->modelScanner()->scan(), false, [], $running, $this->app->engines->loadAll()), $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all()))
 		);
 	}
 
@@ -310,7 +317,7 @@ final class WebApp
 		$errors = PresetValidator::validate($preset, $this->app->engines, false, $this->app->presets);
 		if ($errors !== []) {
 			return Response::html(
-				Html::page('Edit ' . $id, PresetForm::render($preset, $this->app->modelScanner()->scan(), false, $errors, $this->instanceIsLive($id)), '', '', $r->path, $this->headerSummary($this->app->state->all())),
+				Html::page('Edit ' . $id, PresetForm::render($preset, $this->app->modelScanner()->scan(), false, $errors, $this->instanceIsLive($id), $this->app->engines->loadAll()), '', '', $r->path, $this->headerSummary($this->app->state->all())),
 				422
 			);
 		}
@@ -449,6 +456,125 @@ final class WebApp
 			. ($rows !== '' ? $rows : '<tbody><tr><td colspan="11">No models found.</td></tr></tbody>')
 			. '</table>';
 		return Response::html(Html::page('Models', $body, $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all())));
+	}
+
+	// ---------------------------------------------------------------- engines
+
+	private function engineList(Request $r): Response
+	{
+		$engines = $this->app->engines->loadAll();
+		$usedBy  = $this->engineUsedByMap();
+
+		$rows = '';
+		foreach ($engines as $eid => $e) {
+			$inUse = $usedBy[$eid] ?? [];
+			$acts  = '<a class="btn" href="/engines/' . Html::e($eid) . '/edit">Edit</a> '
+				. '<a class="btn" href="/engines/new?copy=' . Html::e(rawurlencode((string)$eid)) . '">Duplicate</a> ';
+			if ($inUse === []) {
+				$acts .= Html::postButton("/engines/{$eid}/delete", 'Delete', 'danger', "Delete engine {$eid}?");
+			}
+			$rows .= '<tr>'
+				. '<td><a href="/engines/' . Html::e($eid) . '/edit">' . Html::e($eid) . '</a></td>'
+				. '<td>' . Html::e($e->name) . '</td>'
+				. '<td>' . Html::e($e->binary_path_default) . '</td>'
+				. '<td>' . Html::e($e->model_dir !== '' ? $e->model_dir : '-') . '</td>'
+				. '<td>' . Html::e($e->host) . '</td>'
+				. '<td>' . Html::e((string)$e->port_range->min) . '–' . Html::e((string)$e->port_range->max) . '</td>'
+				. '<td>' . Html::e($inUse !== [] ? implode(', ', $inUse) : '-') . '</td>'
+				. '<td>' . $acts . '</td></tr>';
+		}
+
+		$body = '<p><a class="btn primary" href="/engines/new">New engine</a></p>'
+			. $this->brokenBanner()
+			. '<table><tr><th>id</th><th>name</th><th>binary</th><th>model dir</th><th>host</th><th>ports</th><th>in use</th><th>actions</th></tr>'
+			. ($rows !== '' ? $rows : '<tr><td colspan="8">No engines yet.</td></tr>')
+			. '</table>';
+		return Response::html(Html::page('Engines', $body, $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all())));
+	}
+
+	/** preset ids referencing each engine_id, for the "in use" column and delete guard. @return array<string,list<string>> */
+	private function engineUsedByMap(): array
+	{
+		$map = [];
+		foreach ($this->app->presets->loadAll() as $pid => $p) {
+			if ($p->engine_id !== '') {
+				$map[$p->engine_id][] = (string)$pid;
+			}
+		}
+		return $map;
+	}
+
+	private function engineNew(Request $r): Response
+	{
+		$copy = $r->query('copy');
+		if ($copy !== '') {
+			try {
+				$src         = $this->app->engines->load($copy);
+				$engine      = new Engine($src->toArray());
+				$engine->id  = $copy . '-copy';
+			} catch (Throwable) {
+				$engine = new Engine();
+			}
+		} else {
+			$engine = new Engine();
+		}
+		return Response::html(Html::page('New engine', EngineForm::render($engine, true), $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all())));
+	}
+
+	private function engineCreate(Request $r): Response
+	{
+		$engine = new Engine(EngineForm::fromPost($r->post));
+		$errors = EngineValidator::validate($engine, true, $this->app->engines);
+		if ($errors !== []) {
+			return Response::html(
+				Html::page('New engine', EngineForm::render($engine, true, $errors), '', '', $r->path, $this->headerSummary($this->app->state->all())),
+				422
+			);
+		}
+		$this->app->engines->save($engine);
+		return Response::redirect('/engines', 'Created ' . $engine->id);
+	}
+
+	private function engineEdit(Request $r, string $id): Response
+	{
+		try {
+			$engine = $this->app->engines->load($id);
+		} catch (Throwable) {
+			return Response::html(Html::page('Not found', '<p>No engine ' . Html::e($id) . '.</p>', '', '', $r->path, $this->headerSummary($this->app->state->all())), 404);
+		}
+		return Response::html(Html::page('Edit ' . $id, EngineForm::render($engine, false), $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all())));
+	}
+
+	private function engineSave(Request $r, string $id): Response
+	{
+		try {
+			$engine = $this->app->engines->load($id);
+		} catch (Throwable) {
+			return Response::html(Html::page('Not found', '<p>No engine ' . Html::e($id) . '.</p>', '', '', $r->path, $this->headerSummary($this->app->state->all())), 404);
+		}
+		$engine->assign(EngineForm::fromPost($r->post));
+		$engine->id = $id; // editing never renames; the id input is readonly
+
+		$errors = EngineValidator::validate($engine, false, $this->app->engines);
+		if ($errors !== []) {
+			return Response::html(
+				Html::page('Edit ' . $id, EngineForm::render($engine, false, $errors), '', '', $r->path, $this->headerSummary($this->app->state->all())),
+				422
+			);
+		}
+		$this->app->engines->save($engine);
+		return Response::redirect('/engines', 'Saved ' . $id);
+	}
+
+	/** Refuses when a preset still references the engine (GUI-DESIGN.md-style guard, same shape as preset delete). */
+	private function engineDelete(string $id): Response
+	{
+		$usedBy = $this->engineUsedByMap()[$id] ?? [];
+		if ($usedBy !== []) {
+			return Response::redirect('/engines', 'In use by ' . implode(', ', $usedBy) . ' — repoint those presets first');
+		}
+		$this->app->engines->delete($id);
+		return Response::redirect('/engines', 'Deleted ' . $id);
 	}
 
 	/**

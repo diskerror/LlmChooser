@@ -220,3 +220,21 @@ table.kv code { word-break: break-all; }
 /* Models tab (Phase 12 tweak): three-line name cell */
 .model-name { font-weight: 600; }
 .model-path, .model-provider { font-size: .85em; }
+
+/* Engine picker popup (preset form): native <dialog>, grayscale to match */
+.engine-picker-open { text-align: left; min-width: 12rem; }
+dialog.engine-picker-dialog {
+	border: 1px solid var(--border, #888);
+	border-radius: 4px;
+	padding: 1rem 1.25rem;
+	min-width: 18rem;
+}
+dialog.engine-picker-dialog::backdrop { background: rgba(0, 0, 0, .35); }
+.engine-picker-list { list-style: none; margin: .5rem 0; padding: 0; }
+.engine-picker-list li { margin: .25rem 0; }
+.engine-picker-list button.engine-pick {
+	width: 100%;
+	text-align: left;
+	padding: .4rem .6rem;
+	cursor: pointer;
+}

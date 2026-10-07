@@ -3,11 +3,11 @@
 declare(strict_types=1);
 
 // Usage: php84 bin/scan-models.php [root ...]
-// With no roots, uses config/model_roots.json.
+// With no roots, scans every configured engine's model_dir.
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use LlmChooser\Model\ModelRootsConfig;
+use LlmChooser\App;
 use LlmChooser\Model\ModelScanner;
 
 $projectRoot = dirname(__DIR__);
@@ -15,7 +15,7 @@ $roots       = array_slice($argv, 1);
 
 $scanner = $roots
 	? new ModelScanner($roots)
-	: ModelScanner::fromConfig(ModelRootsConfig::load($projectRoot . '/config/model_roots.json'), $projectRoot);
+	: (new App($projectRoot))->modelScanner();
 
 foreach ($scanner->scan() as $e) {
 	printf(

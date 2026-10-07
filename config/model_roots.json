@@ -1,4 +1,0 @@
-{
-    "roots": ["/var/lib/llama/models"],
-    "cache_file": "storage/model_cache.json"
-}

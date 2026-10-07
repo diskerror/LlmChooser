@@ -41,19 +41,20 @@ class CliTest extends TestCase
     protected function setUp(): void
     {
         $this->dir = sys_get_temp_dir() . '/llmchooser-cli-' . uniqid('', true);
-        mkdir($this->dir . '/config/engines', 0775, true);
+        mkdir($this->dir . '/storage/engines', 0775, true);
         mkdir($this->dir . '/storage/presets', 0775, true);
         mkdir($this->dir . '/units', 0775, true);
 
         $bin = FakeServer::makeBinary($this->dir . '/bin');
         GgufFixture::model($this->dir . '/models/m.gguf', 'llama', 3000);
 
-        $engines = new EngineRepository($this->dir . '/config/engines');
+        $engines = new EngineRepository($this->dir . '/storage/engines');
         $engines->save(new Engine([
             'id' => 'e',
             'name' => 'E',
             'host' => '127.0.0.1',
             'binary_path_default' => $bin,
+            'model_dir' => $this->dir . '/models',
             'port_range' => ['min' => 5870, 'max' => 5879],
         ]));
 
@@ -65,11 +66,6 @@ class CliTest extends TestCase
                 'model_path' => $this->dir . '/models/m.gguf',
             ]));
         }
-
-        file_put_contents($this->dir . '/config/model_roots.json', json_encode([
-            'roots' => [$this->dir . '/models'],
-            'cache_file' => 'storage/model_cache.json',
-        ]));
 
         $this->app = $this->makeApp(100);
 

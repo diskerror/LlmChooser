@@ -99,6 +99,30 @@ function bindTestForms(scope) {
 }
 bindTestForms(document);
 
+// Engine picker popup (preset form): a <dialog> listing engine names only.
+// Without JS the button still submits whatever engine_id the hidden input
+// already has, so a preset with no JS just keeps its previous/default value
+// — never a silently blank required field.
+document.querySelectorAll('.engine-picker-open').forEach(btn => {
+  const dialog = document.getElementById(btn.dataset.target);
+  if (!dialog) return;
+  btn.addEventListener('click', () => {
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+  });
+  dialog.querySelectorAll('.engine-pick').forEach(pick => {
+    pick.addEventListener('click', () => {
+      const hidden = document.getElementById('engine_id');
+      const label  = btn.querySelector('.engine-picker-label');
+      if (hidden) hidden.value = pick.dataset.engineId;
+      if (label) label.textContent = pick.textContent;
+      dialog.close();
+    });
+  });
+  dialog.querySelectorAll('.engine-picker-close').forEach(close => {
+    close.addEventListener('click', () => dialog.close());
+  });
+});
+
 // Models table (Phase 12): client-side sort of whole tbody blocks, so a
 // model's error/drawer rows travel with its main row. Only columns whose
 // header is .sortable respond; data-sort holds the numeric sort key.

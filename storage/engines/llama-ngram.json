@@ -1,7 +1,8 @@
 {
-    "id": "beelink-local",
-    "name": "Beelink Local",
+    "id": "llama-ngram",
+    "name": "Llama.cpp (n-gram)",
     "binary_path_default": "/opt/llama.cpp-ngrams/build/bin/llama-server",
+    "model_dir": "/var/lib/llama/models",
     "host": "127.0.0.1",
     "port_range": {
         "min": 5800,
