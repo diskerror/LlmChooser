@@ -518,11 +518,38 @@ class WebAppTest extends TestCase
 		$this->assertStringContainsString('>128<', $body);           // head dim
 	}
 
-	public function testModelsUsedByLinksToPreset(): void
+	public function testModelsHasPresetColumn(): void
 	{
 		$body = $this->get('/models')->body;
-		$this->assertStringContainsString('href="/presets/p1/edit"', $body);
-		$this->assertStringContainsString('href="/presets/p2/edit"', $body);
+		$this->assertStringContainsString('<th>Has preset</th>', $body);
+		// both p1 and p2 reference the only fixture model -> one ✓, no links
+		$this->assertStringContainsString('✓', $body);
+		$this->assertStringNotContainsString('Used by', $body);
+	}
+
+	public function testModelsSizeColumnIsBareGbNumber(): void
+	{
+		$body = $this->get('/models')->body;
+		$this->assertStringContainsString('<th class="sortable">Size (GB)</th>', $body);
+		// size cell: digits and a dot only, no unit suffix
+		$this->assertMatchesRegularExpression('/<td data-sort="\d+">[\d.]+<\/td>/', $body);
+	}
+
+	public function testModelNameCellIsThreeLines(): void
+	{
+		// fixture display name is just "m" (no directories): only the file line
+		$this->assertStringContainsString('<div class="model-name">m</div>', $this->get('/models')->body);
+
+		// nested model: provider/middle/file split across the three divs
+		$dir = $this->dir . '/models/acme/batch1';
+		mkdir($dir, 0775, true);
+		GgufFixture::model($dir . '/big.gguf', 'llama', 500);
+		$this->app = $this->makeApp(100);
+		$this->web = new WebApp($this->app);
+		$body = $this->get('/models')->body;
+		$this->assertStringContainsString('<div class="model-name">big</div>', $body);
+		$this->assertStringContainsString('<div class="model-path muted">batch1</div>', $body);
+		$this->assertStringContainsString('<div class="model-provider muted">acme</div>', $body);
 	}
 
 	public function testModelDrawerShowsKvCacheEstimates(): void

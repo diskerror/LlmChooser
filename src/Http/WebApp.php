@@ -413,14 +413,13 @@ final class WebApp
 			$info = $e->info;
 			$rows .= '<tbody class="model-block">';
 			$rows .= '<tr class="model-row"' . ($info !== null ? ' data-sort-ctx="' . $info->contextLength() . '"' : '') . '><td>'
-				. Html::e($e->displayName)
-				. ($e->isSharded() ? ' <span class="muted">(' . count($e->shardPaths) . ' parts)</span>' : '')
+				. $this->modelNameCell($e)
 				. ($e->error !== null ? ' <span class="badge badge-error">Error</span>' : '')
 				. '</td>';
 			$rows .= '<td>' . Html::e($info?->architecture() ?? '-') . '</td>';
 			$rows .= '<td data-sort="' . $this->paramSortValue($e) . '">' . Html::e($this->paramCell($e)) . '</td>';
 			$rows .= '<td>' . Html::e($info !== null ? $info->fileTypeName() : '-') . '</td>';
-			$rows .= '<td data-sort="' . $e->sizeBytes . '">' . Html::e(Format::humanBytes($e->sizeBytes)) . '</td>';
+			$rows .= '<td data-sort="' . $e->sizeBytes . '">' . Html::e(Format::gbNumber($e->sizeBytes)) . '</td>';
 			$rows .= '<td data-sort="' . ($info?->contextLength() ?? 0) . '">'
 				. Html::e((string)($info?->contextLength() ?? '-'))
 				. ($info !== null && $info->hasRopeScaling() ? ' ★' : '')
@@ -429,7 +428,7 @@ final class WebApp
 			$rows .= '<td>' . Html::e($this->headsCell($info)) . '</td>';
 			$rows .= '<td>' . Html::e($this->headDimCell($info)) . '</td>';
 			$rows .= '<td>' . $this->extrasCell($e) . '</td>';
-			$rows .= '<td>' . $this->usedByCell($usedBy[$e->path] ?? []) . '</td></tr>';
+			$rows .= '<td>' . $this->hasPresetCell($usedBy[$e->path] ?? []) . '</td></tr>';
 			if ($e->error !== null) {
 				$rows .= '<tr class="messagerow"><td colspan="11">⚠ ' . Html::e($e->error) . '</td></tr>';
 			}
@@ -443,13 +442,39 @@ final class WebApp
 			'<th' . ($sortable ? ' class="sortable"' : '') . '>' . Html::e($label) . '</th>';
 		$body = '<p>The cache refreshes automatically when a file\'s size or mtime changes. Click a row to expand its details.</p>'
 			. '<table id="models-table"><thead><tr>'
-			. $th('Model', false) . $th('Arch') . $th('Params') . $th('Quant') . $th('Size')
+			. $th('Model', false) . $th('Arch') . $th('Params') . $th('Quant') . $th('Size (GB)')
 			. $th('Max ctx') . $th('Layers') . $th('Heads (Q/KV)', false) . $th('Head dim', false)
-			. $th('Extras', false) . $th('Used by', false)
+			. $th('Extras', false) . $th('Has preset', false)
 			. '</tr></thead>'
 			. ($rows !== '' ? $rows : '<tbody><tr><td colspan="11">No models found.</td></tr></tbody>')
 			. '</table>';
 		return Response::html(Html::page('Models', $body, $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all())));
+	}
+
+	/**
+	 * Model cell: three lines — provider (first path directory), the
+	 * middle path, then the file name. Shards already collapse to one
+	 * display name (with "(N parts)" appended), so the file line is
+	 * suffix-free for them too.
+	 */
+	private function modelNameCell(ModelEntry $e): string
+	{
+		$parts = explode('/', $e->displayName);
+		$file  = (string)array_pop($parts);
+		$provider = $parts === [] ? '' : (string)array_shift($parts);
+		$middle   = implode('/', $parts);
+
+		$out = '';
+		if ($provider !== '') {
+			$out .= '<div class="model-provider muted">' . Html::e($provider) . '</div>';
+		}
+		if ($middle !== '') {
+			$out .= '<div class="model-path muted">' . Html::e($middle) . '</div>';
+		}
+		$out .= '<div class="model-name">' . Html::e($file)
+			. ($e->isSharded() ? ' <span class="muted">(' . count($e->shardPaths) . ' parts)</span>' : '')
+			. '</div>';
+		return $out;
 	}
 
 	/**
@@ -529,14 +554,10 @@ final class WebApp
 		return $map;
 	}
 
-	/** @param list<string> $ids */
-	private function usedByCell(array $ids): string
+	/** "Has preset" column: a plain ✓ when any preset references the model. @param list<string> $ids */
+	private function hasPresetCell(array $ids): string
 	{
-		$links = [];
-		foreach ($ids as $id) {
-			$links[] = '<a href="/presets/' . Html::e($id) . '/edit">' . Html::e($id) . '</a>';
-		}
-		return $links === [] ? '' : implode(', ', $links);
+		return $ids === [] ? '' : '✓';
 	}
 
 	/**

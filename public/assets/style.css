@@ -216,3 +216,7 @@ table.kv code { word-break: break-all; }
 
 /* GPU-held (amdgpu GTT) segment in the memory bar (unified boxes) */
 .membar .segment.gtheld { background: #6a6a6a; }
+
+/* Models tab (Phase 12 tweak): three-line name cell */
+.model-name { font-weight: 600; }
+.model-path, .model-provider { font-size: .85em; }

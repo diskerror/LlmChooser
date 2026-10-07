@@ -27,6 +27,12 @@ final class Format
 		return $bytes . ' B';
 	}
 
+	/** Decimal GB, number only — for columns whose header carries the unit. */
+	public static function gbNumber(int $bytes): string
+	{
+		return sprintf('%.2f', $bytes / 1e9);
+	}
+
 	/** Parameter count as "31B" / "12.5B" / "780M" (trailing zeros trimmed). */
 	public static function paramsHuman(int $n): string
 	{
