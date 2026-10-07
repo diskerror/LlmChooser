@@ -380,14 +380,14 @@ final class WebApp
 		}
 		$rows = '';
 		foreach ($alloc->breakdown as $k => $v) {
-			$rows .= '<tr><td>' . Html::e($k) . '</td><td>' . Html::e(Format::gb((int)$v)) . '</td></tr>';
+			$rows .= '<tr><td>' . Html::e($k) . '</td><td>' . Html::e(Format::humanBytes((int)$v)) . '</td></tr>';
 		}
 		$devs = '';
 		foreach ($alloc->perDevice as $d => $b) {
-			$devs .= '<tr><td>' . Html::e($d) . '</td><td>' . Html::e(Format::gb($b)) . '</td></tr>';
+			$devs .= '<tr><td>' . Html::e($d) . '</td><td>' . Html::e(Format::humanBytes($b)) . '</td></tr>';
 		}
 		$body = '<table><tr><th>Part</th><th>Bytes</th></tr>' . $rows
-			. '<tr><th>Total</th><th>' . Html::e(Format::gb($alloc->totalBytes())) . '</th></tr></table>'
+			. '<tr><th>Total</th><th>' . Html::e(Format::humanBytes($alloc->totalBytes())) . '</th></tr></table>'
 			. '<h2>Per device</h2><table><tr><th>Device</th><th>Bytes</th></tr>' . $devs . '</table>';
 		return Response::html(Html::page('Estimate ' . $id, $body, '', '', $r->path, $this->headerSummary($this->app->state->all())));
 	}
@@ -420,7 +420,7 @@ final class WebApp
 			$rows .= '<td>' . Html::e($info?->architecture() ?? '-') . '</td>';
 			$rows .= '<td data-sort="' . $this->paramSortValue($e) . '">' . Html::e($this->paramCell($e)) . '</td>';
 			$rows .= '<td>' . Html::e($info !== null ? $info->fileTypeName() : '-') . '</td>';
-			$rows .= '<td data-sort="' . $e->sizeBytes . '">' . Html::e(Format::gb($e->sizeBytes)) . '</td>';
+			$rows .= '<td data-sort="' . $e->sizeBytes . '">' . Html::e(Format::humanBytes($e->sizeBytes)) . '</td>';
 			$rows .= '<td data-sort="' . ($info?->contextLength() ?? 0) . '">'
 				. Html::e((string)($info?->contextLength() ?? '-'))
 				. ($info !== null && $info->hasRopeScaling() ? ' ★' : '')
@@ -554,9 +554,9 @@ final class WebApp
 
 		$out = '<details class="drawer"><summary>Details</summary>';
 		$out .= '<table class="kv"><tr><th>KV cache / 1K tokens</th><td>'
-			. 'f16: ' . Html::e(Format::binaryBytes($per['f16']))
-			. ' · q8_0: ' . Html::e(Format::binaryBytes($per['q8_0']))
-			. ' · q4_0: ' . Html::e(Format::binaryBytes($per['q4_0']))
+			. 'f16: ' . Html::e(Format::humanBytes($per['f16']))
+			. ' · q8_0: ' . Html::e(Format::humanBytes($per['q8_0']))
+			. ' · q4_0: ' . Html::e(Format::humanBytes($per['q4_0']))
 			. '</td></tr>';
 
 		// Total at the model's trained max ctx, weights + KV at f16
@@ -564,7 +564,7 @@ final class WebApp
 		$ctx   = $info->contextLength();
 		$total = $e->sizeBytes + (int)ceil($per['f16'] * $ctx / 1000) + \LlmChooser\Memory\MemoryEstimator::OVERHEAD_FIXED_BYTES;
 		$out .= '<tr><th>Total at ' . Html::e((string)$ctx) . ' ctx (f16 KV)</th><td>'
-			. Html::e(Format::binaryBytes($total)) . ' — ' . Html::e(Format::gb($e->sizeBytes)) . ' weights'
+			. Html::e(Format::humanBytes($total)) . ' — ' . Html::e(Format::humanBytes($e->sizeBytes)) . ' weights'
 			. $this->freeMemoryNote($total)
 			. '</td></tr>';
 
@@ -599,7 +599,7 @@ final class WebApp
 			if ($topo->budgetId($d->id) !== $d->id) {
 				continue;
 			}
-			$notes[] = Html::e($d->id) . ' free ' . Html::e(Format::binaryBytes($d->availableBytes))
+			$notes[] = Html::e($d->id) . ' free ' . Html::e(Format::humanBytes($d->availableBytes))
 				. ($d->availableBytes >= $total ? ' ✓' : ' ✗');
 		}
 		return $notes === [] ? '' : ' vs ' . implode(', ', $notes);
@@ -790,7 +790,7 @@ final class WebApp
 				. '<td>' . $this->badge($i->status) . '</td>'
 				. '<td>' . Html::e((string)($i->port ?: '-')) . '</td>'
 				. '<td>' . $this->ctxCell($p) . '</td>'
-				. '<td>' . ($alloc !== null ? Html::e(Format::gb($alloc->totalBytes())) : '-') . '</td>'
+				. '<td>' . ($alloc !== null ? Html::e(Format::humanBytes($alloc->totalBytes())) : '-') . '</td>'
 				. '<td>' . ($i->started_at > 0 ? Html::e(Format::duration(time() - $i->started_at)) : '-') . '</td>'
 				. '<td>' . ($i->last_used > 0 ? Html::e(Format::duration(time() - $i->last_used)) . ' ago' : '-') . '</td>'
 				. '<td>' . $acts . '</td></tr>';
@@ -855,7 +855,7 @@ final class WebApp
 		} catch (Throwable) {
 			return ['?', '?'];
 		}
-		$est = Format::gb($this->app->memory->estimate($p)->totalBytes());
+		$est = Format::humanBytes($this->app->memory->estimate($p)->totalBytes());
 		if ($result->fits) {
 			return [$est, '✓ fits'];
 		}
@@ -864,7 +864,7 @@ final class WebApp
 		foreach ($result->perBudget as $r) {
 			$worst = max($worst, $r['need'] - $r['available']);
 		}
-		return [$est, '✗ needs ' . Format::gb($worst) . ' more'];
+		return [$est, '✗ needs ' . Format::humanBytes($worst) . ' more'];
 	}
 
 	/** Text badge per GUI-DESIGN.md §3: wording differs per status, CSS carries fill/outline. */
@@ -901,7 +901,16 @@ final class WebApp
 	{
 		try {
 			$topo  = $this->app->memory->topology();
-			$mem   = '<table><tr><th>Device</th><th>Total</th><th>Available</th><th>Est. in use by LlmChooser</th><th></th></tr>';
+			// Unified boxes: system RAM held by the GPU driver (amdgpu GTT)
+			// is a large slice of "used" that no process RSS accounts for —
+			// show it so the numbers explain themselves.
+			$heldTotal = 0;
+			foreach ($topo->devices as $d) {
+				$heldTotal += $d->driverHeldBytes;
+			}
+			$mem = '<table><tr><th>Device</th><th>Total</th><th>Available</th>'
+				. ($heldTotal > 0 ? '<th>GPU-held (GTT)</th>' : '')
+				. '<th>Est. in use by LlmChooser</th><th></th></tr>';
 			foreach ($topo->devices as $d) {
 				if ($topo->budgetId($d->id) !== $d->id) {
 					continue; // unified GPUs fold into their budget device
@@ -925,16 +934,25 @@ final class WebApp
 					$pct   = min(100, $d->totalBytes > 0 ? round($bytes / $d->totalBytes * 100, 2) : 0);
 					$segs .= '<div class="segment' . ($i->status === Instance::LOADING ? ' loading' : '')
 						. '" style="width:' . $pct . '%" title="'
-						. Html::e($i->preset_id . ': ' . Format::gb($bytes)) . '">'
+						. Html::e($i->preset_id . ': ' . Format::humanBytes($bytes)) . '">'
 						. Html::e($i->preset_id) . '</div>';
 				}
 				// Free space: unlabelled remainder segment.
 				$freePct = $d->totalBytes > 0 ? max(0, round(($d->totalBytes - $inUse) / $d->totalBytes * 100, 2)) : 0;
+				// GPU-held (GTT) segment, drawn before the instance segments
+				// (it is pre-existing occupancy on unified boxes).
+				$heldSeg = '';
+				if ($d->driverHeldBytes > 0 && $d->totalBytes > 0) {
+					$heldSeg = '<div class="segment gtheld" style="width:'
+						. min(100, round($d->driverHeldBytes / $d->totalBytes * 100, 2))
+						. '%" title="held by GPU driver (amdgpu GTT)"></div>';
+				}
 				$mem .= '<tr><td>' . Html::e($d->id) . '</td>'
-					. '<td>' . Html::e(Format::gb($d->totalBytes)) . '</td>'
-					. '<td>' . Html::e(Format::gb($d->availableBytes)) . '</td>'
-					. '<td>' . Html::e(Format::gb($inUse)) . '</td>'
-					. '<td><div class="membar">' . $segs
+					. '<td>' . Html::e(Format::humanBytes($d->totalBytes)) . '</td>'
+					. '<td>' . Html::e(Format::humanBytes($d->availableBytes)) . '</td>'
+					. ($heldTotal > 0 ? '<td>' . Html::e($d->driverHeldBytes > 0 ? Format::humanBytes($d->driverHeldBytes) : '-') . '</td>' : '')
+					. '<td>' . Html::e(Format::humanBytes($inUse)) . '</td>'
+					. '<td><div class="membar">' . $heldSeg . $segs
 					. '<div class="segment free" style="width:' . $freePct . '%"></div></div></td></tr>';
 			}
 			$mem .= '</table>';
@@ -970,7 +988,10 @@ final class WebApp
 					continue;
 				}
 				$used = max(0, $d->totalBytes - $d->availableBytes);
-				$parts[] = 'RAM ' . Format::gb($used) . '/' . Format::gb($d->totalBytes);
+				$parts[] = 'RAM ' . Format::humanBytes($used) . '/' . Format::humanBytes($d->totalBytes);
+				if ($d->driverHeldBytes > 0) {
+					$parts[] = 'GPU-held ' . Format::humanBytes($d->driverHeldBytes);
+				}
 			}
 		} catch (Throwable) {
 			// probe failure: summary keeps host + count only

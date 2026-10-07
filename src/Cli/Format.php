@@ -6,14 +6,16 @@ namespace LlmChooser\Cli;
 
 final class Format
 {
-	public static function gb(?int $bytes): string
+	/**
+	 * Human size, powers of two: GiB above 1 GiB, MiB above 1 MiB, else
+	 * bytes. (Not decimal GB — the box's RAM numbers must be comparable
+	 * with free/htop.)
+	 */
+	public static function humanBytes(?int $bytes): string
 	{
-		return $bytes === null ? '-' : sprintf('%.1f GB', $bytes / 1e9);
-	}
-
-	/** Binary size: GiB above 1 GiB, MiB above 1 MiB, else bytes. */
-	public static function binaryBytes(int $bytes): string
-	{
+		if ($bytes === null) {
+			return '-';
+		}
 		$gib = 1024 ** 3;
 		$mib = 1024 ** 2;
 		if ($bytes >= $gib) {

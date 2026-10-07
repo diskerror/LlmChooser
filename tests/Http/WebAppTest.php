@@ -498,7 +498,7 @@ class WebAppTest extends TestCase
 		$this->assertStringContainsString('<span class="summary">', $body);
 		$this->assertStringContainsString('1 running', $body);
 		$this->assertStringContainsString('RAM ', $body);
-		$this->assertStringContainsString('/107.4 GB', $body); // 100 GiB in Format::gb style
+		$this->assertStringContainsString('/100.0 GiB', $body); // 100 GiB in Format::humanBytes style
 
 		// summary appears on other pages too
 		$this->assertStringContainsString('1 running', $this->get('/presets')->body);

@@ -41,6 +41,21 @@ final class LinuxTopologyProbe implements TopologyProbe
 			$gpus = $this->nvidiaGpus();
 		}
 
+		// amdgpu GTT: system-RAM pages the GPU driver holds for buffers
+		// (weights, KV) that are NOT in any process's RSS on unified boxes.
+		// The kernel already counts them as used, so this only explains the
+		// gap between "used" and the sum of process RSS; never re-add it.
+		$held = 0;
+		foreach (glob($this->sysRoot . '/class/drm/card*/device/mem_info_gtt_used') ?: [] as $file) {
+			if (preg_match('/^card\d+-/', basename(dirname($file, 2)))) {
+				continue; // connector entries, would double-count
+			}
+			$held += max(0, (int)@file_get_contents($file));
+		}
+		if ($held > 0) {
+			$cpu = new Device($cpu->id, $cpu->kind, $cpu->totalBytes, $cpu->availableBytes, $cpu->unifiedWith, $held);
+		}
+
 		return new MemoryTopology([$cpu, ...$gpus]);
 	}
 

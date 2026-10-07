@@ -213,3 +213,6 @@ details.drawer summary, details.drawer details summary { cursor: pointer; color:
 table.kv th { text-align: left; vertical-align: top; white-space: nowrap; padding-right: .75rem; }
 table.kv td { vertical-align: top; }
 table.kv code { word-break: break-all; }
+
+/* GPU-held (amdgpu GTT) segment in the memory bar (unified boxes) */
+.membar .segment.gtheld { background: #6a6a6a; }

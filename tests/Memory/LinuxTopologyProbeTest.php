@@ -6,6 +6,7 @@ namespace LlmChooser\Tests\Memory;
 
 use LlmChooser\Memory\Device;
 use LlmChooser\Memory\LinuxTopologyProbe;
+use LlmChooser\Memory\MemoryTopology;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
@@ -51,12 +52,15 @@ class LinuxTopologyProbeTest extends TestCase
         ]));
     }
 
-    private function amdCard(string $card, int $total, int $used): void
+    private function amdCard(string $card, int $total, int $used, ?int $gttUsed = null): void
     {
         $dir = $this->root . '/sys/class/drm/' . $card . '/device';
         mkdir($dir, 0775, true);
         file_put_contents($dir . '/mem_info_vram_total', (string)$total);
         file_put_contents($dir . '/mem_info_vram_used', (string)$used);
+        if ($gttUsed !== null) {
+            file_put_contents($dir . '/mem_info_gtt_used', (string)$gttUsed);
+        }
     }
 
     /** @param \Closure(array):?string $fn */
@@ -124,6 +128,32 @@ class LinuxTopologyProbeTest extends TestCase
         $topo = $this->probe(static fn(array $argv): ?string => null)->detect();
 
         $this->assertSame(['gpu0'], $topo->gpuIds());
+    }
+
+    public function test_gtt_held_reported_on_cpu_device(): void
+    {
+        $this->meminfo();
+        $this->amdCard('card0', 536870912, 100000000, 96 * 1024 ** 3);
+        // connector entry with a gtt file must not double-count
+        $this->amdCard('card0-DP-1', 536870912, 100000000, 96 * 1024 ** 3);
+
+        $topo = $this->probe(static fn(array $argv): ?string => null)->detect();
+
+        $this->assertSame(96 * 1024 ** 3, $topo->devices['cpu']->driverHeldBytes);
+        $this->assertSame(0, $topo->devices['gpu0']->driverHeldBytes);
+        // round-trip through the array form
+        $back = MemoryTopology::fromArray($topo->toArray());
+        $this->assertSame(96 * 1024 ** 3, $back->devices['cpu']->driverHeldBytes);
+    }
+
+    public function test_gtt_absent_is_zero(): void
+    {
+        $this->meminfo();
+        $this->amdCard('card0', 536870912, 0);
+
+        $topo = $this->probe(static fn(array $argv): ?string => null)->detect();
+
+        $this->assertSame(0, $topo->devices['cpu']->driverHeldBytes);
     }
 
     public function test_nvidia_fallback(): void

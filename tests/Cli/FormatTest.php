@@ -27,10 +27,12 @@ class FormatTest extends TestCase
         }
     }
 
-    public function test_gb(): void
+    public function test_human_bytes(): void
     {
-        $this->assertSame('1.5 GB', Format::gb(1_500_000_000));
-        $this->assertSame('-', Format::gb(null));
+        $this->assertSame('1.4 GiB', Format::humanBytes(1_500_000_000));
+        $this->assertSame('512 MiB', Format::humanBytes(512 * 1024 * 1024));
+        $this->assertSame('511 B', Format::humanBytes(511));
+        $this->assertSame('-', Format::humanBytes(null));
     }
 
     public function test_duration(): void

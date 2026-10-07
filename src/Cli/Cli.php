@@ -340,8 +340,8 @@ final class Cli
 				$i !== null && $i->pid > 0 ? (string)$i->pid : '-',
 				(string)($i?->port ?: ($p->assigned_port ?? '-')),
 				$i !== null && $i->started_at > 0 ? Format::duration(time() - $i->started_at) : '-',
-				$i !== null ? Format::gb($this->allocTotal($i->allocation)) : '-',
-				$i !== null && $i->pid > 0 ? Format::gb((new ProcessControl())->rssBytes($i->pid)) : '-',
+				$i !== null ? Format::humanBytes($this->allocTotal($i->allocation)) : '-',
+				$i !== null && $i->pid > 0 ? Format::humanBytes((new ProcessControl())->rssBytes($i->pid)) : '-',
 			];
 		}
 		// An instance whose preset file is gone still gets a row — otherwise a
@@ -355,8 +355,8 @@ final class Cli
 				$i->pid > 0 ? (string)$i->pid : '-',
 				(string)($i->port ?: '-'),
 				$i->started_at > 0 ? Format::duration(time() - $i->started_at) : '-',
-				Format::gb($this->allocTotal($i->allocation)),
-				$i->pid > 0 ? Format::gb((new ProcessControl())->rssBytes($i->pid)) : '-',
+				Format::humanBytes($this->allocTotal($i->allocation)),
+				$i->pid > 0 ? Format::humanBytes((new ProcessControl())->rssBytes($i->pid)) : '-',
 			];
 		}
 
@@ -382,7 +382,7 @@ final class Cli
 		$alloc = $i->allocation !== [] ? Allocation::fromArray($i->allocation) : null;
 		$break = [];
 		foreach ($alloc?->breakdown ?? [] as $k => $v) {
-			$break[] = $k . ' ' . Format::gb((int)$v);
+			$break[] = $k . ' ' . Format::humanBytes((int)$v);
 		}
 
 		$health = new HealthChecker();
@@ -397,8 +397,8 @@ final class Cli
 		$this->out->line("port: {$i->port}");
 		$this->out->line('started: ' . ($i->started_at > 0 ? date('Y-m-d H:i:s', $i->started_at) : '-'));
 		$this->out->line('uptime: ' . ($i->started_at > 0 ? Format::duration(time() - $i->started_at) : '-'));
-		$this->out->line('estimate: ' . ($alloc === null ? '-' : Format::gb($alloc->totalBytes())) . ($break === [] ? '' : ' (' . implode(', ', $break) . ')'));
-		$this->out->line('rss: ' . Format::gb((new ProcessControl())->rssBytes($i->pid)));
+		$this->out->line('estimate: ' . ($alloc === null ? '-' : Format::humanBytes($alloc->totalBytes())) . ($break === [] ? '' : ' (' . implode(', ', $break) . ')'));
+		$this->out->line('rss: ' . Format::humanBytes((new ProcessControl())->rssBytes($i->pid)));
 		$this->out->line("health: {$state}" . ($body !== '' ? ' ' . $body : ''));
 		$this->out->line("command: {$i->command}");
 		$this->out->line("log: {$i->log_file}");
@@ -442,7 +442,7 @@ final class Cli
 			}
 			$rows[] = [
 				$e->displayName,
-				Format::gb($e->sizeBytes),
+				Format::humanBytes($e->sizeBytes),
 				$e->info?->architecture() ?? '-',
 				(string)($e->info?->contextLength() ?? '-'),
 				$note,

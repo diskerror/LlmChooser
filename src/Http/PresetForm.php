@@ -252,7 +252,7 @@ final class PresetForm
 		$out   = '<select name="model_path"' . self::title($help, 'model_path') . '>';
 		foreach ($models as $e) {
 			$paths[$e->path] = true;
-			$label           = $e->displayName . ' — ' . Format::gb($e->sizeBytes) . ($e->error !== null ? ' [error]' : '');
+			$label           = $e->displayName . ' — ' . Format::humanBytes($e->sizeBytes) . ($e->error !== null ? ' [error]' : '');
 			$out            .= '<option value="' . Html::e($e->path) . '"'
 				. ($e->path === $p->model_path ? ' selected' : '') . '>' . Html::e($label) . '</option>';
 		}
