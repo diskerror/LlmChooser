@@ -12,8 +12,10 @@ final class GgufFixture
 	 * @param list<array{0:string,1:int,2:mixed}> $kv  [key, type, value]
 	 *        For R::T_ARRAY the value is [elementType, list<values>].
 	 * @param int $padBytes extra zero bytes appended (to give the file a size)
+	 * @param list<array{0:string,1:list<int>,2:int}> $tensors
+	 *        [name, dims, ggml_type] written as the tensor info section.
 	 */
-	public static function write(string $path, array $kv, int $tensorCount = 0, int $padBytes = 0, int $version = 3): void
+	public static function write(string $path, array $kv, int $tensorCount = 0, int $padBytes = 0, int $version = 3, array $tensors = []): void
 	{
 		$dir = dirname($path);
 		if (!is_dir($dir)) {
@@ -22,6 +24,13 @@ final class GgufFixture
 		$b = 'GGUF' . pack('V', $version) . pack('P', $tensorCount) . pack('P', count($kv));
 		foreach ($kv as [$key, $type, $value]) {
 			$b .= self::str($key) . pack('V', $type) . self::value($type, $value);
+		}
+		foreach ($tensors as [$name, $dims, $type]) {
+			$b .= self::str($name) . pack('V', count($dims));
+			foreach ($dims as $d) {
+				$b .= pack('P', $d);
+			}
+			$b .= pack('v', $type) . pack('P', 0); // type, offset (unused)
 		}
 		$b .= str_repeat("\0", $padBytes);
 		file_put_contents($path, $b);

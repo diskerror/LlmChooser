@@ -7,6 +7,9 @@ namespace LlmChooser\Http;
 use LlmChooser\App;
 use LlmChooser\Cli\Format;
 use LlmChooser\Memory\Allocation;
+use LlmChooser\Memory\MemoryEstimator;
+use LlmChooser\Model\GgufInfo;
+use LlmChooser\Model\ModelEntry;
 use LlmChooser\Process\AdmissionException;
 use LlmChooser\Process\Instance;
 use LlmChooser\Preset\Preset;
@@ -198,7 +201,66 @@ final class WebApp
 		} else {
 			$preset = new Preset();
 		}
+
+		// "New preset from this model" (GUI-DESIGN.md §5): pre-fill the
+		// model and its sidecars, and a ctx that fits current free memory
+		// at q8_0 KV. Halving loop, capped — if even a small ctx does not
+		// fit, ctx stays 0 and Start's admission check surfaces the
+		// problem, same as a hand-made preset.
+		$model = $r->query('model');
+		if ($model !== '') {
+			$preset->model_path = $model;
+			foreach ($models as $e) {
+				if ($e->path !== $model || $e->info === null) {
+					continue;
+				}
+				if ($e->sidecars['mmproj'] !== []) {
+					$preset->mmproj_path = $e->sidecars['mmproj'][0];
+				}
+				if ($e->sidecars['draft'] !== []) {
+					$preset->model_draft_path = $e->sidecars['draft'][0];
+				}
+				$preset->args->ctx_size = $this->fittingCtx($e);
+				break;
+			}
+		}
+
 		return Response::html(Html::page('New preset', PresetForm::render($preset, $models, true), $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all())));
+	}
+
+	/**
+	 * Largest ctx from the model's trained maximum down, halving (max 6
+	 * steps), whose weights + q8_0 KV + fixed overhead fit in the biggest
+	 * budget device's free memory. 0 when no probe (macOS) or nothing fits
+	 * — 0 means "model default", which Start's admission check gates.
+	 */
+	private function fittingCtx(ModelEntry $e): int
+	{
+		$ctx = $e->info?->contextLength() ?? 0;
+		if ($ctx <= 0) {
+			return 0;
+		}
+		try {
+			$topo = $this->app->memory->topology();
+		} catch (Throwable) {
+			return 0;
+		}
+		$available = 0;
+		foreach ($topo->devices as $d) {
+			if ($topo->budgetId($d->id) === $d->id) {
+				$available = max($available, $d->availableBytes);
+			}
+		}
+		$est  = new MemoryEstimator();
+		$per1k = $est->kvBytesPer1k($e->info, 'q8_0');
+		for ($i = 0; $i < 6; ++$i) {
+			$need = $e->sizeBytes + (int)ceil($per1k * $ctx / 1000) + MemoryEstimator::OVERHEAD_FIXED_BYTES;
+			if ($need <= $available) {
+				return $ctx;
+			}
+			$ctx = intdiv($ctx, 2);
+		}
+		return 0;
 	}
 
 	private function presetCreate(Request $r): Response
@@ -345,25 +407,229 @@ final class WebApp
 
 	private function models(Request $r): Response
 	{
-		$rows = '';
+		$usedBy = $this->usedByMap();
+		$rows   = '';
 		foreach ($this->app->modelScanner()->scan() as $e) {
-			$sidecars = 0;
-			foreach ($e->sidecars as $list) {
-				$sidecars += count($list);
+			$info = $e->info;
+			$rows .= '<tbody class="model-block">';
+			$rows .= '<tr class="model-row"' . ($info !== null ? ' data-sort-ctx="' . $info->contextLength() . '"' : '') . '><td>'
+				. Html::e($e->displayName)
+				. ($e->isSharded() ? ' <span class="muted">(' . count($e->shardPaths) . ' parts)</span>' : '')
+				. ($e->error !== null ? ' <span class="badge badge-error">Error</span>' : '')
+				. '</td>';
+			$rows .= '<td>' . Html::e($info?->architecture() ?? '-') . '</td>';
+			$rows .= '<td data-sort="' . $this->paramSortValue($e) . '">' . Html::e($this->paramCell($e)) . '</td>';
+			$rows .= '<td>' . Html::e($info !== null ? $info->fileTypeName() : '-') . '</td>';
+			$rows .= '<td data-sort="' . $e->sizeBytes . '">' . Html::e(Format::gb($e->sizeBytes)) . '</td>';
+			$rows .= '<td data-sort="' . ($info?->contextLength() ?? 0) . '">'
+				. Html::e((string)($info?->contextLength() ?? '-'))
+				. ($info !== null && $info->hasRopeScaling() ? ' ★' : '')
+				. '</td>';
+			$rows .= '<td data-sort="' . ($info?->blockCount() ?? 0) . '">' . Html::e((string)($info?->blockCount() ?? '-')) . '</td>';
+			$rows .= '<td>' . Html::e($this->headsCell($info)) . '</td>';
+			$rows .= '<td>' . Html::e($this->headDimCell($info)) . '</td>';
+			$rows .= '<td>' . $this->extrasCell($e) . '</td>';
+			$rows .= '<td>' . $this->usedByCell($usedBy[$e->path] ?? []) . '</td></tr>';
+			if ($e->error !== null) {
+				$rows .= '<tr class="messagerow"><td colspan="11">⚠ ' . Html::e($e->error) . '</td></tr>';
 			}
-			$rows .= '<tr><td>' . Html::e($e->displayName) . '</td>'
-				. '<td>' . Html::e(Format::gb($e->sizeBytes)) . '</td>'
-				. '<td>' . Html::e($e->info?->architecture() ?? '-') . '</td>'
-				. '<td>' . Html::e((string)($e->info?->contextLength() ?? '-')) . '</td>'
-				. '<td>' . ($e->isSharded() ? count($e->shardPaths) : '-') . '</td>'
-				. '<td>' . $sidecars . '</td>'
-				. '<td>' . Html::e($e->error ?? '') . '</td></tr>';
+			if ($info !== null) {
+				$rows .= '<tr class="drawer-row"><td colspan="11">' . $this->modelDrawer($e, $info) . '</td></tr>';
+			}
+			$rows .= '</tbody>';
 		}
-		$body = '<p>The cache refreshes automatically when a file\'s size or mtime changes.</p>'
-			. '<table><tr><th>Model</th><th>Size</th><th>Arch</th><th>Ctx</th><th>Shards</th><th>Sidecars</th><th>Error</th></tr>'
-			. ($rows !== '' ? $rows : '<tr><td colspan="7">No models found.</td></tr>')
+
+		$th = static fn(string $label, bool $sortable = true): string =>
+			'<th' . ($sortable ? ' class="sortable"' : '') . '>' . Html::e($label) . '</th>';
+		$body = '<p>The cache refreshes automatically when a file\'s size or mtime changes. Click a row to expand its details.</p>'
+			. '<table id="models-table"><thead><tr>'
+			. $th('Model', false) . $th('Arch') . $th('Params') . $th('Quant') . $th('Size')
+			. $th('Max ctx') . $th('Layers') . $th('Heads (Q/KV)', false) . $th('Head dim', false)
+			. $th('Extras', false) . $th('Used by', false)
+			. '</tr></thead>'
+			. ($rows !== '' ? $rows : '<tbody><tr><td colspan="11">No models found.</td></tr></tbody>')
 			. '</table>';
 		return Response::html(Html::page('Models', $body, $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all())));
+	}
+
+	/**
+	 * Params column: size_label when present, else the tensor-sum estimate
+	 * (the tensor info section only — weights are never read).
+	 */
+	private function paramCell(ModelEntry $e): string
+	{
+		$info = $e->info;
+		if ($info === null) {
+			return '-';
+		}
+		$label = $info->sizeLabel();
+		if ($label !== '') {
+			return $label;
+		}
+		$n = $info->approxParamCount();
+		return $n > 0 ? '~' . Format::paramsHuman($n) : '-';
+	}
+
+	private function paramSortValue(ModelEntry $e): int
+	{
+		return $e->info?->approxParamCount() ?? 0;
+	}
+
+	/** "32/4 (GQA 8×)" when Q/KV > 1, else "32/32". */
+	private function headsCell(?GgufInfo $info): string
+	{
+		if ($info === null || $info->headCount() <= 0) {
+			return '-';
+		}
+		$q  = $info->headCount();
+		$kv = $info->headCountKv();
+		$r  = $kv > 0 ? intdiv($q, $kv) : 0;
+		return $r > 1 ? $q . '/' . $kv . ' (GQA ' . $r . '×)' : $q . '/' . $kv;
+	}
+
+	/** keyLength, plus "/ valueLength" when they differ (MLA models). */
+	private function headDimCell(?GgufInfo $info): string
+	{
+		if ($info === null || $info->keyLength() <= 0) {
+			return '-';
+		}
+		$k = $info->keyLength();
+		$v = $info->valueLength();
+		return $k === $v ? (string)$k : $k . ' / ' . $v;
+	}
+
+	/** 👁 mmproj sidecar(s), ⚡ draft/MTP sidecar(s). */
+	private function extrasCell(ModelEntry $e): string
+	{
+		$out = [];
+		if ($e->sidecars['mmproj'] !== []) {
+			$out[] = '<span title="vision projector">👁</span>';
+		}
+		if ($e->sidecars['draft'] !== []) {
+			$out[] = '<span title="draft/MTP head">⚡</span>';
+		}
+		return $out === [] ? '' : implode(' ', $out);
+	}
+
+	/**
+	 * "Used by": preset ids referencing a model path, as edit links
+	 * (GUI-DESIGN.md §5). Built once per request here rather than on
+	 * ModelEntry — ModelEntry has no access to the preset repository.
+	 *
+	 * @return array<string,list<string>> path => preset ids
+	 */
+	private function usedByMap(): array
+	{
+		$map = [];
+		foreach ($this->app->presets->loadAll() as $pid => $p) {
+			if ($p->model_path !== '') {
+				$map[$p->model_path][] = (string)$pid;
+			}
+		}
+		return $map;
+	}
+
+	/** @param list<string> $ids */
+	private function usedByCell(array $ids): string
+	{
+		$links = [];
+		foreach ($ids as $id) {
+			$links[] = '<a href="/presets/' . Html::e($id) . '/edit">' . Html::e($id) . '</a>';
+		}
+		return $links === [] ? '' : implode(', ', $links);
+	}
+
+	/**
+	 * Details drawer (GUI-DESIGN.md §5): KV per 1K at three cache types,
+	 * total at max ctx vs free memory, chat template, MoE/RoPE/vocab,
+	 * raw metadata, "New preset from this model".
+	 */
+	private function modelDrawer(ModelEntry $e, GgufInfo $info): string
+	{
+		$est = new \LlmChooser\Memory\MemoryEstimator();
+		$per = [];
+		foreach (['f16', 'q8_0', 'q4_0'] as $type) {
+			$per[$type] = $est->kvBytesPer1k($info, $type);
+		}
+
+		$out = '<details class="drawer"><summary>Details</summary>';
+		$out .= '<table class="kv"><tr><th>KV cache / 1K tokens</th><td>'
+			. 'f16: ' . Html::e(Format::binaryBytes($per['f16']))
+			. ' · q8_0: ' . Html::e(Format::binaryBytes($per['q8_0']))
+			. ' · q4_0: ' . Html::e(Format::binaryBytes($per['q4_0']))
+			. '</td></tr>';
+
+		// Total at the model's trained max ctx, weights + KV at f16
+		// (llama.cpp's default cache type) + the estimator's fixed overhead.
+		$ctx   = $info->contextLength();
+		$total = $e->sizeBytes + (int)ceil($per['f16'] * $ctx / 1000) + \LlmChooser\Memory\MemoryEstimator::OVERHEAD_FIXED_BYTES;
+		$out .= '<tr><th>Total at ' . Html::e((string)$ctx) . ' ctx (f16 KV)</th><td>'
+			. Html::e(Format::binaryBytes($total)) . ' — ' . Html::e(Format::gb($e->sizeBytes)) . ' weights'
+			. $this->freeMemoryNote($total)
+			. '</td></tr>';
+
+		$out .= '<tr><th>Chat template</th><td>'
+			. ($info->hasChatTemplate() ? 'yes — ' . Html::e($info->chatTemplateFirstLine()) : 'no')
+			. '</td></tr>';
+		if ($info->expertCount() > 0) {
+			$out .= '<tr><th>Experts</th><td>' . Html::e($info->expertCount() . ' (active ' . $info->expertUsedCount() . ')') . '</td></tr>';
+		}
+		$out .= '<tr><th>RoPE base</th><td>' . Html::e((string)$info->ropeFreqBase()) . '</td></tr>';
+		$out .= '<tr><th>Vocab</th><td>' . Html::e((string)$info->vocabSize()) . '</td></tr>';
+		$out .= '</table>';
+
+		$out .= '<details><summary>Raw metadata (' . count($info->metadata) . ' keys)</summary>'
+			. $this->rawMetadataTable($info->metadata) . '</details>';
+
+		$out .= '<p><a class="btn" href="/presets/new?model=' . Html::e(rawurlencode($e->path)) . '">New preset from this model</a></p>';
+		$out .= '</details>';
+		return $out;
+	}
+
+	/** " vs free memory" tail for the drawer; silently omitted when no probe (macOS). */
+	private function freeMemoryNote(int $total): string
+	{
+		try {
+			$topo = $this->app->memory->topology();
+		} catch (Throwable) {
+			return '';
+		}
+		$notes = [];
+		foreach ($topo->devices as $d) {
+			if ($topo->budgetId($d->id) !== $d->id) {
+				continue;
+			}
+			$notes[] = Html::e($d->id) . ' free ' . Html::e(Format::binaryBytes($d->availableBytes))
+				. ($d->availableBytes >= $total ? ' ✓' : ' ✗');
+		}
+		return $notes === [] ? '' : ' vs ' . implode(', ', $notes);
+	}
+
+	/** @param array<string,mixed> $metadata */
+	private function rawMetadataTable(array $metadata): string
+	{
+		$rows = '';
+		$keys = array_keys($metadata);
+		sort($keys);
+		foreach ($keys as $key) {
+			$rows .= '<tr><td><code>' . Html::e((string)$key) . '</code></td><td>'
+				. Html::e($this->metaValueText($metadata[$key])) . '</td></tr>';
+		}
+		return '<table class="kv">' . $rows . '</table>';
+	}
+
+	/** Long values truncated; skipped arrays are absent from $metadata entirely. */
+	private function metaValueText(mixed $v): string
+	{
+		if (is_bool($v)) {
+			return $v ? 'true' : 'false';
+		}
+		if (is_array($v)) {
+			$first = implode(', ', array_map(static fn($x) => (string)$x, array_slice($v, 0, 8)));
+			return '[' . count($v) . '] ' . $first . (count($v) > 8 ? ', …' : '');
+		}
+		$s = (string)$v;
+		return strlen($s) > 160 ? substr($s, 0, 160) . '…' : $s;
 	}
 
 	private function apiStatus(): Response

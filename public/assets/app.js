@@ -98,3 +98,43 @@ function bindTestForms(scope) {
   });
 }
 bindTestForms(document);
+
+// Models table (Phase 12): client-side sort of whole tbody blocks, so a
+// model's error/drawer rows travel with its main row. Only columns whose
+// header is .sortable respond; data-sort holds the numeric sort key.
+const modelsTable = document.getElementById('models-table');
+if (modelsTable) {
+  modelsTable.querySelectorAll('th.sortable').forEach(th => {
+    th.addEventListener('click', () => {
+      const head = [...modelsTable.querySelectorAll('thead th')];
+      const col  = head.indexOf(th);
+      const dir  = th.classList.contains('asc') ? -1 : 1;
+      modelsTable.querySelectorAll('th.sortable').forEach(h => h.classList.remove('asc', 'desc'));
+      th.classList.add(dir === 1 ? 'asc' : 'desc');
+      const key = tb => {
+        const cell = tb.querySelector('tr.model-row td:nth-child(' + (col + 1) + ')');
+        if (!cell) return null;
+        return cell.hasAttribute('data-sort') ? parseFloat(cell.getAttribute('data-sort')) : cell.textContent.trim();
+      };
+      const tbodies = [...modelsTable.querySelectorAll('tbody.model-block')];
+      tbodies.sort((a, b) => {
+        const ka = key(a), kb = key(b);
+        if (typeof ka === 'number' && typeof kb === 'number' && !isNaN(ka) && !isNaN(kb)) return (ka - kb) * dir;
+        return String(ka).localeCompare(String(kb), undefined, { numeric: true }) * dir;
+      });
+      // Detach, then re-append in sorted order (append preserves order).
+      tbodies.forEach(tb => tb.remove());
+      tbodies.forEach(tb => modelsTable.append(tb));
+    });
+  });
+  // Clicking a model row opens/closes its drawer (§5), except when the
+  // click was on a link (Used-by / New preset) or selected text.
+  modelsTable.querySelectorAll('tr.model-row').forEach(row => {
+    row.style.cursor = 'pointer';
+    row.addEventListener('click', e => {
+      if (e.target.closest('a') || window.getSelection().toString()) return;
+      const drawer = row.parentElement.querySelector('details.drawer');
+      if (drawer) drawer.open = !drawer.open;
+    });
+  });
+}

@@ -227,4 +227,56 @@ class MemoryEstimatorTest extends TestCase
         $a = $this->est->estimate($this->preset(['n_gpu_layers' => 'all']), GgufReader::read($this->model), $this->cpuOnly());
         $this->assertSame(['cpu'], array_keys($a->perDevice));
     }
+
+    // ---- kvBytesPer1k (Phase 12 drawer) ----
+
+    public function test_kv_bytes_per_1k_f16_vs_q4_0(): void
+    {
+        $info = GgufReader::read($this->model);
+        $f16  = $this->est->kvBytesPer1k($info, 'f16');
+        $q40  = $this->est->kvBytesPer1k($info, 'q4_0');
+        // exact: 1000 * 10 layers * (2*8 + 2*8) dims * b
+        $this->assertSame(1000 * self::BLOCKS * 32 * 2, $f16);
+        // q4_0 is 18/32 vs f16's 64/32 bytes per element: 28.125% of f16,
+        // i.e. "roughly a quarter" per the phase doc's tolerance framing.
+        $this->assertEqualsWithDelta($f16 * (18 / 64), $q40, 1);
+    }
+
+    public function test_kv_bytes_per_1k_gqa_vs_mha(): void
+    {
+        // $this->model is GQA (4 heads, 2 kv). Build a dense twin with the
+        // same embedding_length and kv heads == heads.
+        $mha = $this->dir . '/mha.gguf';
+        GgufFixture::write($mha, [
+            ['general.architecture', GgufReader::T_STRING, 'llama'],
+            ['llama.block_count', GgufReader::T_UINT32, self::BLOCKS],
+            ['llama.embedding_length', GgufReader::T_UINT32, self::EMBED],
+            ['llama.attention.head_count', GgufReader::T_UINT32, 4],
+            ['llama.attention.head_count_kv', GgufReader::T_UINT32, 4],
+            ['llama.attention.key_length', GgufReader::T_UINT32, self::KLEN],
+            ['llama.attention.value_length', GgufReader::T_UINT32, self::KLEN],
+        ]);
+        $gqa = $this->est->kvBytesPer1k(GgufReader::read($this->model), 'f16');
+        $mhaKv = $this->est->kvBytesPer1k(GgufReader::read($mha), 'f16');
+        $this->assertLessThan($mhaKv, $gqa);
+        // exactly half: 2 kv heads vs 4, everything else equal
+        $this->assertSame(intdiv($mhaKv, 2), $gqa);
+    }
+
+    public function test_kv_bytes_per_1k_hybrid_interval(): void
+    {
+        $h = $this->dir . '/hybrid.gguf';
+        GgufFixture::write($h, [
+            ['general.architecture', GgufReader::T_STRING, 'qwen3next'],
+            ['qwen3next.block_count', GgufReader::T_UINT32, 10],
+            ['qwen3next.full_attention_interval', GgufReader::T_UINT32, 4],
+            ['qwen3next.attention.head_count_kv', GgufReader::T_UINT32, 2],
+            ['qwen3next.attention.key_length', GgufReader::T_UINT32, self::KLEN],
+        ]);
+        // only intdiv(10, 4) = 2 layers pay KV
+        $this->assertSame(
+            (int)ceil(1000 * 2 * (2 * self::KLEN * 2) * 2.0),
+            $this->est->kvBytesPer1k(GgufReader::read($h), 'f16')
+        );
+    }
 }

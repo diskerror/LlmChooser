@@ -21,7 +21,12 @@ use LlmChooser\Preset\Preset;
  */
 final class MemoryEstimator
 {
-	/** Bytes per KV element for each cache type (llama.cpp block sizes). */
+	/**
+	 * Bytes per KV element for each cache type, i.e. sizeof(block)/32
+	 * from llama.cpp ggml/src/ggml-common.h (e.g. block_q8_0 = 2 + 32 =
+	 * 34 bytes/32 elems, block_q4_0 = 2 + 16 = 18/32, block_q5_0 =
+	 * 2 + 4 + 16 = 22/32; local checkout at CLionProjects/llama.cpp).
+	 */
 	public const KV_BYTES = [
 		'f32'    => 4.0, 'f16' => 2.0, 'bf16' => 2.0,
 		'q8_0'   => 34 / 32, 'q4_0' => 18 / 32, 'q4_1' => 20 / 32,
@@ -37,6 +42,30 @@ final class MemoryEstimator
 		$total     = array_sum($breakdown);
 
 		return new Allocation($this->perDevice($preset, $info, $topology, $total), $breakdown);
+	}
+
+	/**
+	 * KV cache bytes per 1000 tokens of context, for one cache type
+	 * (same type for K and V — the UI's f16/q8_0/q4_0 comparison rows).
+	 *
+	 * Hybrid models (full_attention_interval) only pay KV on every
+	 * interval-th layer, same correction as breakdown(). MLA-style models
+	 * where K/V dims diverge sum both sides.
+	 */
+	public function kvBytesPer1k(GgufInfo $info, string $cacheType): int
+	{
+		$blocks = $info->blockCount();
+		if ($blocks <= 0) {
+			return 0;
+		}
+		$interval = (int)$info->archGet('full_attention_interval', 0);
+		$kvLayers = $interval > 1 ? intdiv($blocks, $interval) : $blocks;
+
+		$b = self::KV_BYTES[strtolower($cacheType)] ?? 2.0;
+		$kDim = $info->headCountKv() * $info->keyLength();
+		$vDim = $info->headCountKv() * $info->valueLength();
+
+		return (int)ceil(1000 * $kvLayers * ($kDim + $vDim) * $b);
 	}
 
 	/**

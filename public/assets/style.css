@@ -201,3 +201,15 @@ meter { width: 12rem; height: 1rem; }
 }
 .membar .segment.free { background: transparent; }
 .test-result { font-size: .9em; color: var(--muted); margin-left: .3rem; }
+
+/* Models table (Phase 12): sortable headers + details drawer */
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable::after { content: " ↕"; color: var(--muted); font-size: .85em; }
+th.sortable.asc::after { content: " ↑"; }
+th.sortable.desc::after { content: " ↓"; }
+.drawer-row > td { padding: 0; border: none; }
+details.drawer, details.drawer details { margin: .25rem 0 .5rem; }
+details.drawer summary, details.drawer details summary { cursor: pointer; color: var(--muted); }
+table.kv th { text-align: left; vertical-align: top; white-space: nowrap; padding-right: .75rem; }
+table.kv td { vertical-align: top; }
+table.kv code { word-break: break-all; }

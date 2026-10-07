@@ -82,7 +82,26 @@ final class GgufReader
 				}
 			}
 
-			return new GgufInfo($version, $tensorCount, $meta);
+			// Tensor info section (GGUF spec v2/v3): per tensor — name,
+			// n_dims (uint32), dims (n_dims x uint64), ggml type (uint16),
+			// offset (uint64). We keep name/dims/type and stop; the data
+			// section is never touched.
+			$tensors = [];
+			for ($i = 0; $i < $tensorCount; ++$i) {
+				$name   = $this->str();
+				$nDims  = $this->u32();
+				if ($nDims > 16) {
+					throw new GgufException("Implausible tensor dimension count {$nDims}: {$path}");
+				}
+				$dims = [];
+				for ($d = 0; $d < $nDims; ++$d) {
+					$dims[] = $this->u64();
+				}
+				$tensors[] = ['name' => $name, 'dims' => $dims, 'type' => $this->u16()];
+				$this->u64(); // offset within the data section — not needed
+			}
+
+			return new GgufInfo($version, $tensorCount, $meta, $tensors);
 		}
 		finally {
 			fclose($fh);
@@ -115,6 +134,11 @@ final class GgufReader
 	private function u32(): int
 	{
 		return unpack('V', $this->bytes(4))[1];
+	}
+
+	private function u16(): int
+	{
+		return unpack('v', $this->bytes(2))[1];
 	}
 
 	private function u64(): int

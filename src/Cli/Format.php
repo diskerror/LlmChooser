@@ -11,6 +11,32 @@ final class Format
 		return $bytes === null ? '-' : sprintf('%.1f GB', $bytes / 1e9);
 	}
 
+	/** Binary size: GiB above 1 GiB, MiB above 1 MiB, else bytes. */
+	public static function binaryBytes(int $bytes): string
+	{
+		$gib = 1024 ** 3;
+		$mib = 1024 ** 2;
+		if ($bytes >= $gib) {
+			return sprintf('%.1f GiB', $bytes / $gib);
+		}
+		if ($bytes >= $mib) {
+			return sprintf('%.0f MiB', $bytes / $mib);
+		}
+		return $bytes . ' B';
+	}
+
+	/** Parameter count as "31B" / "12.5B" / "780M" (trailing zeros trimmed). */
+	public static function paramsHuman(int $n): string
+	{
+		$trim = static fn(string $s): string => rtrim(rtrim($s, '0'), '.');
+		return match (true) {
+			$n >= 1_000_000_000 => $trim(sprintf('%.2f', $n / 1e9)) . 'B',
+			$n >= 1_000_000     => $trim(sprintf('%.2f', $n / 1e6)) . 'M',
+			$n >= 1_000         => $trim(sprintf('%.1f', $n / 1e3)) . 'K',
+			default             => (string)$n,
+		};
+	}
+
 	public static function duration(int $seconds): string
 	{
 		if ($seconds < 0) {

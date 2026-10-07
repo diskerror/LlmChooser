@@ -503,4 +503,80 @@ class WebAppTest extends TestCase
 		// summary appears on other pages too
 		$this->assertStringContainsString('1 running', $this->get('/presets')->body);
 	}
+
+	// ---- Phase 12: Models table + drawer ----
+
+	public function testModelsTableShowsNewColumns(): void
+	{
+		// base fixture: 32 blocks, ctx 8192, embed 4096, 32/8 heads (GQA 4x), head dim 128
+		$body = $this->get('/models')->body;
+		$this->assertStringContainsString('<th class="sortable">Arch</th>', $body);
+		$this->assertStringContainsString('llama', $body);
+		$this->assertStringContainsString('>8192<', $body);
+		$this->assertStringContainsString('>32<', $body);            // layers
+		$this->assertStringContainsString('32/8 (GQA 4×)', $body);   // heads
+		$this->assertStringContainsString('>128<', $body);           // head dim
+	}
+
+	public function testModelsUsedByLinksToPreset(): void
+	{
+		$body = $this->get('/models')->body;
+		$this->assertStringContainsString('href="/presets/p1/edit"', $body);
+		$this->assertStringContainsString('href="/presets/p2/edit"', $body);
+	}
+
+	public function testModelDrawerShowsKvCacheEstimates(): void
+	{
+		$body = $this->get('/models')->body;
+		$this->assertStringContainsString('KV cache / 1K tokens', $body);
+		// exact expectations: f16 1000*32*(1024+1024)*2 = 131,072,000 = 125 MiB
+		$f16 = 1000 * 32 * 2048 * 2;
+		$q80 = (int)ceil(1000 * 32 * 2048 * (34 / 32));
+		$q40 = (int)ceil(1000 * 32 * 2048 * (18 / 32));
+		$this->assertStringContainsString('f16: ' . $this->bin($f16), $body);
+		$this->assertStringContainsString('q8_0: ' . $this->bin($q80), $body);
+		$this->assertStringContainsString('q4_0: ' . $this->bin($q40), $body);
+		$this->assertGreaterThan($q80, $f16);
+		$this->assertGreaterThan($q40, $q80);
+	}
+
+	private function bin(int $bytes): string
+	{
+		$gib = 1024 ** 3;
+		$mib = 1024 ** 2;
+		return match (true) {
+			$bytes >= $gib => sprintf('%.1f GiB', $bytes / $gib),
+			$bytes >= $mib => sprintf('%.0f MiB', $bytes / $mib),
+			default        => $bytes . ' B',
+		};
+	}
+
+	public function testNewPresetFromModelPrefillsFields(): void
+	{
+		$path = $this->dir . '/models/m.gguf';
+		$body = $this->get('/presets/new', ['model' => $path])->body;
+		$this->assertStringContainsString('value="' . htmlspecialchars($path, ENT_QUOTES) . '" selected', $body);
+		// 100 GiB free, tiny fixture: max ctx 8192 fits at q8_0 KV.
+		$this->assertStringContainsString('name="args[ctx_size]" value="8192"', $body);
+	}
+
+	public function testNewPresetFromModelCtxBacksOffWhenTight(): void
+	{
+		// 1.5 GiB free: 8192 ctx needs ~570 MiB q8_0 KV + 1 GiB fixed
+		// overhead = ~1.6 GiB > budget; half (4096) needs ~1.3 GiB, fits.
+		$this->app = $this->makeApp(1.5);
+		$this->web = new WebApp($this->app);
+		$body = $this->get('/presets/new', ['model' => $this->dir . '/models/m.gguf'])->body;
+		$this->assertStringContainsString('name="args[ctx_size]" value="4096"', $body);
+	}
+
+	public function testScanErrorRowStillShowsWarningBadge(): void
+	{
+		file_put_contents($this->dir . '/models/broken.gguf', 'GGUF3-not-really');
+		$this->app = $this->makeApp(100); // fresh app: cache must not hide the new file
+		$this->web = new WebApp($this->app);
+		$body = $this->get('/models')->body;
+		$this->assertStringContainsString('badge-error', $body);
+		$this->assertStringContainsString('broken', $body);
+	}
 }
