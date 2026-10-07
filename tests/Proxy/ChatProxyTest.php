@@ -22,7 +22,7 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * The /v1 proxy against the fake llama-server (ports 5890-5898).
- * Nothing external: no beelink, no network beyond loopback, no real models.
+ * Nothing external: no live LLM server, no network beyond loopback, no real models.
  */
 class ChatProxyTest extends TestCase
 {
@@ -32,18 +32,19 @@ class ChatProxyTest extends TestCase
 	protected function setUp(): void
 	{
 		$this->dir = sys_get_temp_dir() . '/llmchooser-proxy-' . uniqid('', true);
-		mkdir($this->dir . '/config/engines', 0775, true);
+		mkdir($this->dir . '/storage/engines', 0775, true);
 		mkdir($this->dir . '/storage/presets', 0775, true);
 
 		$bin = FakeServer::makeBinary($this->dir . '/bin');
 		GgufFixture::model($this->dir . '/models/m.gguf', 'llama', 3000);
 
-		$engines = new EngineRepository($this->dir . '/config/engines');
+		$engines = new EngineRepository($this->dir . '/storage/engines');
 		$engines->save(new Engine([
 			'id' => 'e',
 			'name' => 'E',
 			'host' => '127.0.0.1',
 			'binary_path_default' => $bin,
+			'model_dir' => $this->dir . '/models',
 			'port_range' => ['min' => 5890, 'max' => 5898],
 		]));
 
@@ -56,11 +57,6 @@ class ChatProxyTest extends TestCase
 		$presets->save(new Preset([
 			'id' => 'b', 'name' => 'B', 'engine_id' => 'e',
 			'model_path' => $this->dir . '/models/m.gguf',
-		]));
-
-		file_put_contents($this->dir . '/config/model_roots.json', json_encode([
-			'roots' => [$this->dir . '/models'],
-			'cache_file' => 'storage/model_cache.json',
 		]));
 
 		$g    = 1024 ** 3;

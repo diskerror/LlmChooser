@@ -10,8 +10,8 @@ final class AdmissionCheck
 	 * Does $new fit alongside $running?
 	 *
 	 * Unified aliasing happens here: on a box whose GPU shares system RAM
-	 * (beelink), every per-GPU number folds into the single "cpu" budget, so
-	 * the whole thing collapses to one comparison.
+	 * (a unified-memory APU host), every per-GPU number folds into the
+	 * single "cpu" budget, so the whole thing collapses to one comparison.
 	 *
 	 * The comparison is `need <= available` WITHOUT adding what is already
 	 * running, because MemAvailable already reflects the memory live

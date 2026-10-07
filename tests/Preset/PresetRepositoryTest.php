@@ -35,7 +35,7 @@ class PresetRepositoryTest extends TestCase
         $preset = new Preset([
             'id'            => 'test-preset',
             'name'          => 'Test Preset',
-            'engine_id'     => 'beelink-local',
+            'engine_id'     => 'llama-ngram',
             'model_path'    => '/models/test.gguf',
             'assigned_port' => 5801,
             'args'          => ['temp' => 0.3, 'ctx_size' => 8192, 'flash_attn' => 'on'],
@@ -45,7 +45,7 @@ class PresetRepositoryTest extends TestCase
         $loaded = $repo->load('test-preset');
         $this->assertSame('test-preset', $loaded->id);
         $this->assertSame('Test Preset', $loaded->name);
-        $this->assertSame('beelink-local', $loaded->engine_id);
+        $this->assertSame('llama-ngram', $loaded->engine_id);
         $this->assertSame('/models/test.gguf', $loaded->model_path);
         $this->assertSame(5801, $loaded->assigned_port);
         $this->assertSame(0.3, $loaded->args->temp);
@@ -118,7 +118,7 @@ class PresetRepositoryTest extends TestCase
         file_put_contents($this->dir . '/legacy.json', json_encode([
             'id'         => 'legacy',
             'name'       => 'Legacy',
-            'engine_id'  => 'beelink-local',
+            'engine_id'  => 'llama-ngram',
             'model_path' => '/models/legacy.gguf',
         ]));
         $this->assertTrue($repo->load('legacy')->enabled);

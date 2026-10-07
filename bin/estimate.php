@@ -7,7 +7,7 @@ declare(strict_types=1);
 // verdict for starting that preset alongside nothing.
 //
 // Linux only: topology detection reads /proc and /sys. On the Mac this
-// throws "Cannot read memory info" — that is expected, run it on beelink.
+// throws "Cannot read memory info" — that is expected, run it on a Linux host.
 require __DIR__ . '/../vendor/autoload.php';
 
 use LlmChooser\Memory\LinuxTopologyProbe;

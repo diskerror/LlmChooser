@@ -6,7 +6,7 @@ namespace LlmChooser\Http;
 
 /**
  * Widget choices the PHP types alone cannot express. Lists come from
- * DESIGN.md §10 and the beelink `llama-server --help`.
+ * DESIGN.md §10 and `llama-server --help`.
  */
 final class FieldHints
 {

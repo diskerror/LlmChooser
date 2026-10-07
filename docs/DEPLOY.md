@@ -1,9 +1,10 @@
-# Deploying LlmChooser to beelink
+# Deploying LlmChooser to a dedicated LLM host
 
-Verified on beelink, 2026-10-03: PHP 8.4.26 with `curl`, `intl`, `pcntl`,
-`posix`; `/usr/bin/systemctl` present; user `llama` exists (uid 988, in
-groups `video` and `render` — both needed for GPU access);
-`/opt/llama.cpp-ngrams/build/bin/llama-server` exists.
+Verified on Debian 13, PHP 8.4.26 with `curl`, `intl`, `pcntl`,
+`posix`; `/usr/bin/systemctl` present; a dedicated service user (e.g. `llama`,
+in groups `video` and `render` for GPU access);
+`/opt/llama.cpp-ngrams/build/bin/llama-server` exists (the default engine
+binary path — adjust `storage/engines/llama-ngram.json` if yours differs).
 
 Prerequisites (already satisfied):
 
@@ -11,7 +12,7 @@ Prerequisites (already satisfied):
     # php8.4-cli on Debian 13 includes pcntl and posix.
     # intl is required by diskerror/typed; curl by the /v1 proxy.
 
-Project location on beelink: decide once, e.g. /opt/llmchooser.
+Project location: decide once, e.g. /opt/llmchooser.
 The `llama` user must be able to write to `storage/` there:
 
     sudo chown -R llama:llama /opt/llmchooser/storage
@@ -20,10 +21,10 @@ Run CLI commands as the llama user so file ownership stays consistent:
 
     sudo -u llama php /opt/llmchooser/bin/llmchooser health
 
-`bin/llmchooser` is `#!/usr/bin/env php`; on beelink `php` is 8.4, so it can
-be run directly. It refuses to start under PHP < 8.4.
+`bin/llmchooser` is `#!/usr/bin/env php`; if `php` on your `PATH` is 8.4+, it
+can be run directly. It refuses to start under PHP < 8.1.
 
-Engine binary: config/engines/beelink-local.json points at
+Engine binary: storage/engines/llama-ngram.json points at
 /opt/llama.cpp-ngrams/build/bin/llama-server. LlmChooser sets
 LD_LIBRARY_PATH to that binary's directory automatically.
 
@@ -91,9 +92,9 @@ Later, nginx + php-fpm can replace `php -S` without code changes
    `spec_draft_n_max 2`, `parallel 1`, and extra_flags
    `--fit off --lazy-mode on --metrics`.
 2. Start one preset from the dashboard; test it:
-   `curl -N http://beelink:8090/v1/chat/completions?preset=ID ...`
-3. Point ONE client (e.g. a Hermes test profile) at
-   `http://beelink:8090/v1` and use it for a day.
+   `curl -N http://<host>:8090/v1/chat/completions?preset=ID ...`
+3. Point ONE client (e.g. a test profile) at
+   `http://<host>:8090/v1` and use it for a day.
 4. When happy: `sudo systemctl disable --now llama-swap`, then either move
    LlmChooser to :1234 (change the ExecStart port) or repoint clients.
 5. Rollback: `sudo systemctl enable --now llama-swap`.

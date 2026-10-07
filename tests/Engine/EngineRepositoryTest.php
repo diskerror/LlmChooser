@@ -76,13 +76,14 @@ class EngineRepositoryTest extends TestCase
         $repo->load('../evil');
     }
 
-    public function test_seeded_beelink_local_config(): void
+    public function test_seeded_llama_ngram_config(): void
     {
-        $repo = new EngineRepository(dirname(__DIR__, 2) . '/config/engines');
-        $engine = $repo->load('beelink-local');
-        $this->assertSame('beelink-local', $engine->id);
-        $this->assertSame('Beelink Local', $engine->name);
+        $repo = new EngineRepository(dirname(__DIR__, 2) . '/storage/engines');
+        $engine = $repo->load('llama-ngram');
+        $this->assertSame('llama-ngram', $engine->id);
+        $this->assertSame('Llama.cpp (n-gram)', $engine->name);
         $this->assertSame('/opt/llama.cpp-ngrams/build/bin/llama-server', $engine->binary_path_default);
+        $this->assertSame('/var/lib/llama/models', $engine->model_dir);
         $this->assertSame('127.0.0.1', $engine->host);
         $this->assertSame(5800, $engine->port_range->min);
         $this->assertSame(5900, $engine->port_range->max);

@@ -17,7 +17,7 @@ final class Html
 	 * meta-refresh, see the dashboard's loading state). $path is the current
 	 * request path, used to mark the active tab (GUI-DESIGN.md §2).
 	 * $summary is the plain-text header status line (GUI-DESIGN.md §2:
-	 * "beelink · 3 running · RAM 61/124 GB"), escaped here.
+	 * "host · 3 running · RAM 61/124 GB"), escaped here.
 	 */
 	public static function page(string $title, string $body, string $msg = '', string $head = '', string $path = '', string $summary = ''): string
 	{
@@ -37,15 +37,16 @@ final class Html
 			. '</body></html>';
 	}
 
-	/** The three tabs; active rule per GUI-DESIGN.md §2. */
+	/** The four tabs; active rule per GUI-DESIGN.md §2. */
 	private static function tabLinks(string $path): string
 	{
 		$out = '';
-		foreach (['/' => 'Dashboard', '/presets' => 'Presets', '/models' => 'Models'] as $href => $label) {
+		foreach (['/' => 'Dashboard', '/presets' => 'Presets', '/models' => 'Models', '/engines' => 'Engines'] as $href => $label) {
 			$active = match ($href) {
 				'/'        => $path === '/' || $path === '',
 				'/presets' => $path === '/presets' || str_starts_with($path, '/presets/'),
-				default    => $path === '/models' || str_starts_with($path, '/models/'),
+				'/models'  => $path === '/models' || str_starts_with($path, '/models/'),
+				default    => $path === '/engines' || str_starts_with($path, '/engines/'),
 			};
 			$out .= '<a href="' . self::e($href) . '"' . ($active ? ' class="active"' : '') . '>'
 				. self::e($label) . '</a> ';

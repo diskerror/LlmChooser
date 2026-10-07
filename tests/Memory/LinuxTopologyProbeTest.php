@@ -43,7 +43,7 @@ class LinuxTopologyProbeTest extends TestCase
 
     private function meminfo(): void
     {
-        // beelink's real values.
+        // Example real-world values from a unified-memory APU host.
         file_put_contents($this->root . '/proc/meminfo', implode("\n", [
             'MemTotal:       131018920 kB',
             'MemFree:         1000000 kB',
@@ -69,7 +69,7 @@ class LinuxTopologyProbeTest extends TestCase
         return new LinuxTopologyProbe($this->root . '/proc', $this->root . '/sys', $fn);
     }
 
-    public function test_beelink_unified(): void
+    public function test_unified_memory_host(): void
     {
         $this->meminfo();
         $this->amdCard('card0', 536870912, 100000000);

@@ -29,7 +29,7 @@
         "level": "basic",
         "upstream_default": "n/a",
         "short": "Which llama-server build runs this preset.",
-        "full": "Engines are defined in `config/engines/`. Each one names a `llama-server`\nbinary and the defaults that apply to it. Use a different engine when you\nneed a fork or a specially built version, for example the ngrams build for\nMTP drafting. Help text and allowed values in this form are written for\nthe beelink ngrams build. Another engine may accept different values for\n`spec_type` or the cache types."
+        "full": "Engines are defined in `config/engines/`. Each one names a `llama-server`\nbinary and the defaults that apply to it. Use a different engine when you\nneed a fork or a specially built version, for example the ngrams build for\nMTP drafting. Help text and allowed values in this form are written for\nthe n-gram/MTP build. Another engine may accept different values for\n`spec_type` or the cache types."
     },
     "binary_path": {
         "label": "Binary override",
@@ -93,7 +93,7 @@
         "level": "basic",
         "upstream_default": "0 (= model's trained context)",
         "short": "Size of the prompt context in tokens (0 = model's trained maximum).",
-        "full": "The context window holds the conversation, meaning the system prompt,\nhistory, tool output, and the reply being generated. When it fills,\ngeneration stops (or old tokens are dropped, see Context shift).\n\nCost: the KV cache grows linearly with context, and at long contexts it can\nexceed the model weights. The Models tab shows the cost per 1K tokens.\nRoughly, KV bytes ≈ ctx × layers × KV heads × head dim × 2 (K and V) ×\nbytes per element. GQA models (few KV heads) are cheap, older full-attention\nmodels are expensive.\n\nWith `parallel` > 1 the context is shared across slots: each slot gets\nctx_size ÷ parallel unless the build sizes a shared pool (see Parallel).\n\n0 means \"whatever the model was trained for\", read from the GGUF. That is\nReid's standing choice on beelink, which has the memory for it. Lower it\nto fit a bigger model, or to run several presets at once. Going above the\ntrained length requires RoPE/YaRN scaling (extra flags) and degrades\nquality."
+        "full": "The context window holds the conversation, meaning the system prompt,\nhistory, tool output, and the reply being generated. When it fills,\ngeneration stops (or old tokens are dropped, see Context shift).\n\nCost: the KV cache grows linearly with context, and at long contexts it can\nexceed the model weights. The Models tab shows the cost per 1K tokens.\nRoughly, KV bytes ≈ ctx × layers × KV heads × head dim × 2 (K and V) ×\nbytes per element. GQA models (few KV heads) are cheap, older full-attention\nmodels are expensive.\n\nWith `parallel` > 1 the context is shared across slots: each slot gets\nctx_size ÷ parallel unless the build sizes a shared pool (see Parallel).\n\n0 means \"whatever the model was trained for\", read from the GGUF. That is\na reasonable default on a host with enough memory for it. Lower it\nto fit a bigger model, or to run several presets at once. Going above the\ntrained length requires RoPE/YaRN scaling (extra flags) and degrades\nquality."
     },
     "n_predict": {
         "label": "Max reply tokens",
@@ -117,7 +117,7 @@
         "level": "advanced",
         "upstream_default": "512",
         "short": "Tokens actually computed together on the device.",
-        "full": "The micro-batch the GPU really computes in one go. Larger values speed up\nprompt processing, especially on long prompts, at the cost of a bigger\ncompute buffer (hundreds of MiB to a few GiB). On beelink's iGPU, 1024–2048\noften gives noticeably faster prompt reading; measure with a long prompt\nbefore and after. It has no effect on generation speed."
+        "full": "The micro-batch the GPU really computes in one go. Larger values speed up\nprompt processing, especially on long prompts, at the cost of a bigger\ncompute buffer (hundreds of MiB to a few GiB). On an iGPU, 1024–2048\noften gives noticeably faster prompt reading; measure with a long prompt\nbefore and after. It has no effect on generation speed."
     },
     "flash_attn": {
         "label": "Flash attention",
@@ -149,7 +149,7 @@
         "level": "advanced",
         "upstream_default": "-1 (auto)",
         "short": "Number of requests served concurrently (-1 = auto).",
-        "full": "Each slot is an independent conversation. Several clients, or Hermes plus\na subagent, can generate at once, and continuous batching interleaves\nthem. Total throughput rises, but each stream slows down.\n\nHow context is shared (from this build's source):\n\n- `ctx_size` is the **total** KV cache for all slots together. Memory\n  does not grow with `parallel`.\n- With an explicit `parallel` N, each slot gets ctx_size ÷ N (rounded to a\n  multiple of 256). So 4 slots on 128K give 32K per conversation.\n- With `parallel = -1` (auto), the server uses **4 slots and one unified KV\n  pool**. Every slot can use up to the whole context, but they share it,\n  so a long conversation in one slot leaves less for the others.\n- No slot ever exceeds the model's trained context.\n\n1 suits a single user and MTP/speculative drafting (Reid's ngrams preset\nuses 1). Use 2–4 when several agents hit the same model."
+        "full": "Each slot is an independent conversation. Several clients, or an agent plus\na subagent, can generate at once, and continuous batching interleaves\nthem. Total throughput rises, but each stream slows down.\n\nHow context is shared (from this build's source):\n\n- `ctx_size` is the **total** KV cache for all slots together. Memory\n  does not grow with `parallel`.\n- With an explicit `parallel` N, each slot gets ctx_size ÷ N (rounded to a\n  multiple of 256). So 4 slots on 128K give 32K per conversation.\n- With `parallel = -1` (auto), the server uses **4 slots and one unified KV\n  pool**. Every slot can use up to the whole context, but they share it,\n  so a long conversation in one slot leaves less for the others.\n- No slot ever exceeds the model's trained context.\n\n1 suits a single user and MTP/speculative drafting (the ngrams preset\nuses 1). Use 2–4 when several agents hit the same model."
     },
     "no_context_shift": {
         "label": "Disable context shift",
@@ -165,7 +165,7 @@
         "level": "advanced",
         "upstream_default": "-1 (auto)",
         "short": "CPU threads for generation (-1 = auto).",
-        "full": "This only matters for the parts running on the CPU (layers not offloaded,\nor a pure CPU run). With everything on the GPU it barely matters. When the\nCPU does matter, the best value is usually the number of **physical**\ncores (16 on beelink), not logical threads. More can be slower because of\nmemory-bandwidth contention.\n\n---\n\n## GPU"
+        "full": "This only matters for the parts running on the CPU (layers not offloaded,\nor a pure CPU run). With everything on the GPU it barely matters. When the\nCPU does matter, the best value is usually the number of **physical**\ncores, not logical threads. More can be slower because of\nmemory-bandwidth contention.\n\n---\n\n## GPU"
     },
     "n_gpu_layers": {
         "label": "GPU layers",
@@ -173,7 +173,7 @@
         "level": "basic",
         "upstream_default": "auto",
         "short": "Layers to put on the GPU: a number, `auto`, or `all`.",
-        "full": "`all` puts every layer on the GPU (fastest, needs the most VRAM). `auto` lets\nllama.cpp fit as many as memory allows. A number offloads exactly that\nmany, and the rest run on the CPU, much slower. On beelink, RAM and VRAM\nare the same unified pool, so `all` is almost always right. Lower it only\nwhen memory is short and you accept a slowdown."
+        "full": "`all` puts every layer on the GPU (fastest, needs the most VRAM). `auto` lets\nllama.cpp fit as many as memory allows. A number offloads exactly that\nmany, and the rest run on the CPU, much slower. On a unified-memory host,\nRAM and VRAM are the same unified pool, so `all` is almost always right. Lower it only\nwhen memory is short and you accept a slowdown."
     },
     "split_mode": {
         "label": "Multi-GPU split",
@@ -181,7 +181,7 @@
         "level": "advanced",
         "upstream_default": "layer",
         "short": "How to divide the model across GPUs.",
-        "full": "Irrelevant with one GPU (beelink). `layer` gives whole layers to each GPU,\nwhich is pipelined and the safe choice. `row` splits each matrix across GPUs\nand only helps with fast interconnects. `tensor` is newer tensor parallelism.\n`none` uses only `main_gpu`."
+        "full": "Irrelevant with one GPU. `layer` gives whole layers to each GPU,\nwhich is pipelined and the safe choice. `row` splits each matrix across GPUs\nand only helps with fast interconnects. `tensor` is newer tensor parallelism.\n`none` uses only `main_gpu`."
     },
     "tensor_split": {
         "label": "GPU split ratios",
@@ -189,7 +189,7 @@
         "level": "advanced",
         "upstream_default": "proportional to free memory",
         "short": "Share of the model per GPU, e.g. `3,1`.",
-        "full": "Multi-GPU only. Ratios, not absolute sizes: `3,1` puts ¾ on GPU 0. Leave it\nempty on beelink."
+        "full": "Multi-GPU only. Ratios, not absolute sizes: `3,1` puts ¾ on GPU 0. Leave it\nempty on a single-GPU host."
     },
     "main_gpu": {
         "label": "Main GPU",
@@ -197,7 +197,7 @@
         "level": "advanced",
         "upstream_default": "0",
         "short": "GPU index for `split_mode none`/`row`.",
-        "full": "Multi-GPU only. Leave it at 0 on beelink.\n\n---\n\n## Sampling\n\nThese are server defaults. Most OpenAI-compatible clients send their own\ntemperature and top_p per request, and those override what is set here.\nModel cards often state recommended values; use them."
+        "full": "Multi-GPU only. Leave it at 0 on a single-GPU host.\n\n---\n\n## Sampling\n\nThese are server defaults. Most OpenAI-compatible clients send their own\ntemperature and top_p per request, and those override what is set here.\nModel cards often state recommended values; use them."
     },
     "temp": {
         "label": "Temperature",
@@ -269,7 +269,7 @@
         "level": "advanced",
         "upstream_default": "none",
         "short": "How draft tokens are produced for speculative decoding.",
-        "full": "All methods keep the output identical to normal decoding. They only change\nspeed, which depends on how often the drafts are accepted (shown in the\nserver log). Families:\n\n- `draft-simple`: a separate small model from the same family (`model_draft_path`). Classic speculative decoding.\n- `draft-mtp`: the model's own multi-token-prediction head. Models like Qwen3-Next / DeepSeek ship one; it is very accurate and cheap. Reid's beelink preset uses this with `spec_draft_n_max 2`.\n- `draft-eagle3`: an EAGLE-3 draft head trained for the specific model.\n- `ngram-*`: no draft model at all. Guesses come from repeating sequences already in the context. They are excellent for code editing, rewriting, and quoting (the output copies the input), and do nothing for fresh prose. They cost almost no memory.\n- `draft-dflash`: a small block-diffusion draft model trained for one specific target (e.g. `Qwen3-4B-DFlash` for Qwen3-4B), given as `model_draft_path`. It reads the target's hidden states and emits a whole block of draft tokens in one pass, rather than one at a time. Upstream example: `spec_draft_n_max 15`, `flash_attn on`.\n- `draft-dspark`: DFlash plus a small \"Markov head\" that conditions each position on the previous token, which recovers some left-to-right accuracy. The draft is a DeepSpec checkpoint for one target. Upstream example: `spec_draft_n_max 7`. Only Qwen3-backbone drafts are supported so far.\n- For both, `spec_draft_n_max` is clamped to the draft's trained block size, so setting it higher does nothing.\n\nThe field accepts a comma-separated list to combine methods. Expect\nroughly 1.3–2.5× faster generation when acceptance is high, and possibly a\nsmall slowdown when it is low."
+        "full": "All methods keep the output identical to normal decoding. They only change\nspeed, which depends on how often the drafts are accepted (shown in the\nserver log). Families:\n\n- `draft-simple`: a separate small model from the same family (`model_draft_path`). Classic speculative decoding.\n- `draft-mtp`: the model's own multi-token-prediction head. Models like Qwen3-Next / DeepSeek ship one; it is very accurate and cheap. The ngram engine's preset uses this with `spec_draft_n_max 2`.\n- `draft-eagle3`: an EAGLE-3 draft head trained for the specific model.\n- `ngram-*`: no draft model at all. Guesses come from repeating sequences already in the context. They are excellent for code editing, rewriting, and quoting (the output copies the input), and do nothing for fresh prose. They cost almost no memory.\n- `draft-dflash`: a small block-diffusion draft model trained for one specific target (e.g. `Qwen3-4B-DFlash` for Qwen3-4B), given as `model_draft_path`. It reads the target's hidden states and emits a whole block of draft tokens in one pass, rather than one at a time. Upstream example: `spec_draft_n_max 15`, `flash_attn on`.\n- `draft-dspark`: DFlash plus a small \"Markov head\" that conditions each position on the previous token, which recovers some left-to-right accuracy. The draft is a DeepSpec checkpoint for one target. Upstream example: `spec_draft_n_max 7`. Only Qwen3-backbone drafts are supported so far.\n- For both, `spec_draft_n_max` is clamped to the draft's trained block size, so setting it higher does nothing.\n\nThe field accepts a comma-separated list to combine methods. Expect\nroughly 1.3–2.5× faster generation when acceptance is high, and possibly a\nsmall slowdown when it is low."
     },
     "spec_draft_n_max": {
         "label": "Max draft tokens",
