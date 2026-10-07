@@ -83,9 +83,10 @@ final class GgufReader
 			}
 
 			// Tensor info section (GGUF spec v2/v3): per tensor — name,
-			// n_dims (uint32), dims (n_dims x uint64), ggml type (uint16),
-			// offset (uint64). We keep name/dims/type and stop; the data
-			// section is never touched.
+			// n_dims (uint32), dims (n_dims x uint64), ggml type (uint32 —
+			// NOT uint16; gguf-py gguf_reader.py _get_tensor_info_field
+			// reads np.uint32), offset (uint64). We keep name/dims/type and
+			// stop; the data section is never touched.
 			$tensors = [];
 			for ($i = 0; $i < $tensorCount; ++$i) {
 				$name   = $this->str();
@@ -97,7 +98,7 @@ final class GgufReader
 				for ($d = 0; $d < $nDims; ++$d) {
 					$dims[] = $this->u64();
 				}
-				$tensors[] = ['name' => $name, 'dims' => $dims, 'type' => $this->u16()];
+				$tensors[] = ['name' => $name, 'dims' => $dims, 'type' => $this->u32()];
 				$this->u64(); // offset within the data section — not needed
 			}
 

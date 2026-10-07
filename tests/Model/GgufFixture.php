@@ -30,7 +30,7 @@ final class GgufFixture
 			foreach ($dims as $d) {
 				$b .= pack('P', $d);
 			}
-			$b .= pack('v', $type) . pack('P', 0); // type, offset (unused)
+			$b .= pack('V', $type) . pack('P', 0); // type (uint32 per spec), offset
 		}
 		$b .= str_repeat("\0", $padBytes);
 		file_put_contents($path, $b);
