@@ -146,6 +146,121 @@ class PresetFormTest extends TestCase
 		$this->assertNotEmpty(FieldHints::GROUPS);
 	}
 
+	// ---- Phase 13: template-derived reasoning_effort enum ----
+
+	/** A synthetic GGUF carrying the real qwen3-next chat template. */
+	private function qwenModel(string $name): string
+	{
+		$path    = $this->dir . '/' . $name;
+		$fixture = (string)file_get_contents(__DIR__ . '/../Fixtures/chat_templates/qwen3-next.jinja');
+		GgufFixture::model($path, 'qwen2', 1000, [['tokenizer.chat_template', GgufReader::T_STRING, $fixture]]);
+		return $path;
+	}
+
+	private function enginesAndPresets(): array
+	{
+		$engines = new EngineRepository($this->dir . '/engines');
+		$engines->save(new Engine(['id' => 'e', 'port_range' => ['min' => 5880, 'max' => 5889]]));
+		$presets = new PresetRepository($this->dir . '/presets');
+		return [$engines, $presets];
+	}
+
+	public function testReasoningEffortRejectedForKnownFamily(): void
+	{
+		[$engines, $presets] = $this->enginesAndPresets();
+		$model = $this->qwenModel('qwen.gguf');
+		$e = PresetValidator::validate(
+			new Preset(['id' => 'q', 'name' => 'N', 'engine_id' => 'e', 'model_path' => $model,
+				'args' => ['reasoning_effort' => 'minimal']]),
+			$engines, true, $presets);
+		$this->assertArrayHasKey('args.reasoning_effort', $e);
+		$this->assertStringContainsString('xhigh, medium, low', $e['args.reasoning_effort']);
+		$this->assertStringContainsString("got 'minimal'", $e['args.reasoning_effort']);
+	}
+
+	public function testReasoningEffortAcceptedForKnownFamily(): void
+	{
+		[$engines, $presets] = $this->enginesAndPresets();
+		$model = $this->qwenModel('qwen.gguf');
+		// '' is rejected by the pre-existing generic SELECT loop (not in
+		// FieldHints::SELECT), independent of the family check; the family
+		// check itself treats '' as "unset" and never adds its error.
+		foreach (['low', 'medium', 'xhigh', 'default'] as $ok) {
+			$e = PresetValidator::validate(
+				new Preset(['id' => 'q', 'name' => 'N', 'engine_id' => 'e', 'model_path' => $model,
+					'args' => ['reasoning_effort' => $ok]]),
+				$engines, true, $presets);
+			$this->assertArrayNotHasKey('args.reasoning_effort', $e, "effort '{$ok}' must pass");
+		}
+	}
+
+	public function testReasoningEffortPermissiveForUnknownTemplate(): void
+	{
+		[$engines, $presets] = $this->enginesAndPresets();
+		// no chat template at all
+		$plain = $this->dir . '/plain.gguf';
+		GgufFixture::model($plain, 'llama', 1000);
+		$e = PresetValidator::validate(
+			new Preset(['id' => 'q', 'name' => 'N', 'engine_id' => 'e', 'model_path' => $plain,
+				'args' => ['reasoning_effort' => 'minimal']]),
+			$engines, true, $presets);
+		$this->assertArrayNotHasKey('args.reasoning_effort', $e);
+
+		// a chat template that isn't in the family table
+		$other = $this->dir . '/other.gguf';
+		GgufFixture::model($other, 'llama', 1000, [['tokenizer.chat_template', GgufReader::T_STRING, 'Hello {{ message }}']]);
+		$e = PresetValidator::validate(
+			new Preset(['id' => 'q', 'name' => 'N', 'engine_id' => 'e', 'model_path' => $other,
+				'args' => ['reasoning_effort' => 'minimal']]),
+			$engines, true, $presets);
+		$this->assertArrayNotHasKey('args.reasoning_effort', $e);
+	}
+
+	// ---- Phase 13: form control for reasoning_effort ----
+
+	public function testRenderFamilySelectForKnownTemplate(): void
+	{
+		$model = $this->qwenModel('qwen.gguf');
+		$info  = GgufReader::read($model);
+		$entry = new ModelEntry($model, 'qwen', 1000, [$model],
+			['mmproj' => [], 'draft' => [], 'ngrams' => []], $info, null);
+		$html  = PresetForm::render(
+			new Preset(['id' => 'p', 'engine_id' => 'e', 'model_path' => $model,
+				'args' => ['reasoning_effort' => 'low']]), [$entry], false);
+		// exactly default + the family's set, current value preselected
+		$this->assertMatchesRegularExpression(
+			'/<select name="args\[reasoning_effort\]"[^>]*>'
+			. '<option value="default">default<\/option>'
+			. '<option value="xhigh">xhigh<\/option>'
+			. '<option value="medium">medium<\/option>'
+			. '<option value="low" selected>low<\/option>'
+			. '<\/select>/', $html);
+		$this->assertStringNotContainsString('minimal', $html);
+	}
+
+	public function testRenderFamilySelectShowsStaleValueWithoutCoercing(): void
+	{
+		$model = $this->qwenModel('qwen.gguf');
+		$info  = GgufReader::read($model);
+		$entry = new ModelEntry($model, 'qwen', 1000, [$model],
+			['mmproj' => [], 'draft' => [], 'ngrams' => []], $info, null);
+		$html  = PresetForm::render(
+			new Preset(['id' => 'p', 'engine_id' => 'e', 'model_path' => $model,
+				'args' => ['reasoning_effort' => 'minimal']]), [$entry], false);
+		// the saved-but-invalid value is still shown, flagged, not rewritten
+		$this->assertMatchesRegularExpression(
+			'/<option value="minimal" selected>minimal \(invalid for this model\)<\/option>/', $html);
+	}
+
+	public function testRenderGenericSelectForUnknownTemplate(): void
+	{
+		// the models() fixture has no chat template -> generic FieldHints select
+		$html = PresetForm::render(
+			new Preset(['id' => 'p', 'engine_id' => 'e', 'model_path' => $this->dir . '/m.gguf']), $this->models(), false);
+		$this->assertMatchesRegularExpression('/<select name="args\[reasoning_effort\]"/', $html);
+		$this->assertStringContainsString('<option value="minimal">', $html);
+	}
+
 	// ---- Phase 10: OPNsense row shape ----
 
 	public function testRenderIncludesHelpTogglePerField(): void

@@ -6,10 +6,13 @@ namespace LlmChooser\Http;
 
 use LlmChooser\Cli\Format;
 use LlmChooser\Engine\EngineCollection;
+use LlmChooser\Model\ChatTemplateFamily;
+use LlmChooser\Model\GgufReader;
 use LlmChooser\Model\ModelEntry;
 use LlmChooser\Preset\Preset;
 use LlmChooser\Preset\PresetArgs;
 use ReflectionProperty;
+use Throwable;
 
 /**
  * The preset form, GENERATED from Preset + PresetArgs + field_help.json —
@@ -40,6 +43,30 @@ final class PresetForm
 				$modelCtx = $e->info?->contextLength() ?? 0;
 				break;
 			}
+		}
+
+		// reasoning_effort's allowed set is template-specific (Phase 13):
+		// a detected family renders the field as a <select>; unknown
+		// families keep the generic free-text-style select. Prefer the
+		// scanned model's cached header; only parse the file directly for
+		// paths outside the scan (e.g. a preset pointing elsewhere).
+		$family = null;
+		if ($p->model_path !== '') {
+			$template = null;
+			foreach ($models as $e) {
+				if ($e->path === $p->model_path) {
+					$template = $e->info?->chatTemplate();
+					break;
+				}
+			}
+			if ($template === null && is_file($p->model_path)) {
+				try {
+					$template = GgufReader::read($p->model_path)->chatTemplate();
+				} catch (Throwable) {
+					$template = '';
+				}
+			}
+			$family = $template !== null ? ChatTemplateFamily::detect($template) : null;
 		}
 
 		$out = '';
@@ -110,7 +137,13 @@ final class PresetForm
 				if ($name === 'ctx_size' && (int)$value === 0 && $modelCtx > 0) {
 					$override = 'default model: ' . $modelCtx;
 				}
-				$out .= self::fieldRow($name, self::argControl($name, $value, $help),
+				if ($name === 'reasoning_effort' && $family !== null) {
+					$control  = self::familyReasoningControl($value, $family, $help);
+					$override = 'template family: ' . $family;
+				} else {
+					$control = self::argControl($name, $value, $help);
+				}
+				$out .= self::fieldRow($name, $control,
 					$value, $argDefaults->{$name}, $help, self::err($errors, 'args.' . $name), $override);
 			}
 			$out .= '</details>';
@@ -308,6 +341,30 @@ final class PresetForm
 		}
 		$out .= '</datalist>';
 		return $out;
+	}
+
+	/**
+	 * reasoning_effort when the model's chat template family is known
+	 * (Phase 13): a <select> of 'default' plus the family's accepted
+	 * values. A saved value outside that set is still shown (selected),
+	 * never silently rewritten — validation flags it, the form stays
+	 * honest about what's actually stored.
+	 *
+	 * @param array<string,array<string,string>> $help
+	 */
+	private static function familyReasoningControl(mixed $value, string $family, array $help): string
+	{
+		$n     = 'args[' . Html::e('reasoning_effort') . ']';
+		$title = self::title($help, 'reasoning_effort');
+		$out   = '<select name="' . $n . '"' . $title . '>';
+		$opts  = array_merge(['default'], ChatTemplateFamily::reasoningEfforts($family));
+		foreach ($opts as $opt) {
+			$out .= '<option value="' . Html::e($opt) . '"' . ((string)$value === $opt ? ' selected' : '') . '>' . Html::e($opt) . '</option>';
+		}
+		if ((string)$value !== '' && !in_array((string)$value, $opts, true)) {
+			$out .= '<option value="' . Html::e($value) . '" selected>' . Html::e($value) . ' (invalid for this model)</option>';
+		}
+		return $out . '</select>';
 	}
 
 	/** The control for one PresetArgs field (the row wrapper is fieldRow). */

@@ -107,6 +107,19 @@ class GgufInfoTest extends TestCase
 		$this->assertSame('no-newline-template', $short->chatTemplateFirstLine());
 	}
 
+	public function test_chat_template_round_trip(): void
+	{
+		$with = $this->info([['tokenizer.chat_template', R::T_STRING, "a\nb\nc"]]);
+		$this->assertSame("a\nb\nc", $with->chatTemplate());
+		$without = $this->info([['general.architecture', R::T_STRING, 'llama']]);
+		$this->assertSame('', $without->chatTemplate());
+
+		// the real extracted fixture must survive the GGUF write/read round trip verbatim
+		$fixture = (string)file_get_contents(__DIR__ . '/../Fixtures/chat_templates/qwen3-next.jinja');
+		$info    = $this->info([['tokenizer.chat_template', R::T_STRING, $fixture]]);
+		$this->assertSame($fixture, $info->chatTemplate());
+	}
+
 	public function test_vocab_size_fallback(): void
 	{
 		// The reader skips string arrays (tokenizer.ggml.tokens is one),

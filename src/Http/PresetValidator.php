@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace LlmChooser\Http;
 
 use LlmChooser\Engine\EngineRepository;
+use LlmChooser\Model\ChatTemplateFamily;
+use LlmChooser\Model\GgufReader;
 use LlmChooser\Preset\Preset;
 use LlmChooser\Preset\PresetRepository;
 use Throwable;
@@ -66,6 +68,26 @@ final class PresetValidator
 		foreach (FieldHints::SELECT as $field => $allowed) {
 			if (!in_array((string)$p->args->{$field}, $allowed, true)) {
 				$errors['args.' . $field] = 'Not an allowed value';
+			}
+		}
+
+		// Template-specific reasoning_effort enum (Phase 13). Runs AFTER the
+		// generic SELECT loop so the more informative family message wins
+		// when a value is outside both domains. Unknown families (and
+		// unreadable headers) stay permissive: we don't know their rules.
+		if ($p->model_path !== '' && is_file($p->model_path)) {
+			try {
+				$family = ChatTemplateFamily::detect(GgufReader::read($p->model_path)->chatTemplate());
+			} catch (Throwable) {
+				$family = null; // corrupt/unreadable header: model_path errors cover it
+			}
+			if ($family !== null) {
+				$valid  = ChatTemplateFamily::reasoningEfforts($family);
+				$effort = (string)$p->args->reasoning_effort;
+				if ($effort !== '' && $effort !== 'default' && !in_array($effort, $valid, true)) {
+					$errors['args.reasoning_effort'] =
+						'This model only accepts: ' . implode(', ', $valid) . " (got '{$effort}')";
+				}
 			}
 		}
 

@@ -170,6 +170,12 @@ final class GgufInfo
 		return $nl === false ? substr($t, 0, 80) : substr($t, 0, $nl);
 	}
 
+	/** Full chat template string, or "" if absent. For family detection only — do not render it. */
+	public function chatTemplate(): string
+	{
+		return (string)$this->get('tokenizer.chat_template', '');
+	}
+
 	/**
 	 * Approximate total parameter count: sum of element counts across all
 	 * tensor shapes (tensor info only — weights are never read). Label it
