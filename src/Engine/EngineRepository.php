@@ -59,8 +59,9 @@ class EngineRepository
 
     private function pathFor(string $id): string
     {
-        // Reject path traversal — id must be a simple slug.
-        if (!preg_match('/^[a-zA-Z0-9_-]+$/', $id)) {
+        // Dots are allowed (see PresetRepository::pathFor), but never ".."
+        // or a leading/trailing dot.
+        if (!preg_match('/^(?!\.)(?!.*\.\.)[A-Za-z0-9_.-]+(?<!\.)$/', $id)) {
             throw new RuntimeException("Invalid engine id: {$id}");
         }
         return $this->dir . '/' . $id . '.json';

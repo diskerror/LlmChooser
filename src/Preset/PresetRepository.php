@@ -67,8 +67,11 @@ class PresetRepository
 
     private function pathFor(string $id): string
     {
-        // Reject path traversal — id must be a simple slug.
-        if (!preg_match('/^[a-zA-Z0-9_-]+$/', $id)) {
+        // Dots are allowed (model ids like "qwen3.8-flash" need them), but
+        // never ".." or a leading/trailing dot — id is used verbatim as a
+        // filename, so that's the only thing standing between here and
+        // path traversal.
+        if (!preg_match('/^(?!\.)(?!.*\.\.)[A-Za-z0-9_.-]+(?<!\.)$/', $id)) {
             throw new RuntimeException("Invalid preset id: {$id}");
         }
         return $this->dir . '/' . $id . '.json';

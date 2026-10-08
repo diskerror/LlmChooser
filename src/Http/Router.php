@@ -11,11 +11,14 @@ final class Router
 
 	/**
 	 * $pattern like "/presets/{id}/edit". "{name}" matches one path segment
-	 * of [A-Za-z0-9_-]+. Handler gets (Request $r, array $params).
+	 * of [A-Za-z0-9_.-]+ (ids may contain dots, e.g. "qwen3.8-flash", but
+	 * never "..", which this charset alone does not exclude — route
+	 * params are validated as ids again downstream by the repositories,
+	 * which do reject "..").  Handler gets (Request $r, array $params).
 	 */
 	public function add(string $method, string $pattern, callable $handler): void
 	{
-		$regex          = '#^' . preg_replace('#\{(\w+)\}#', '(?P<$1>[A-Za-z0-9_-]+)', $pattern) . '$#';
+		$regex          = '#^' . preg_replace('#\{(\w+)\}#', '(?P<$1>[A-Za-z0-9_.-]+)', $pattern) . '$#';
 		$this->routes[] = [$method, $regex, $handler];
 	}
 

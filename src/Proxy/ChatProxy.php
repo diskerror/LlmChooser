@@ -7,6 +7,9 @@ namespace LlmChooser\Proxy;
 use LlmChooser\App;
 use LlmChooser\Config\BrokenFile;
 use LlmChooser\Http\Request;
+use LlmChooser\Model\GgufException;
+use LlmChooser\Model\GgufReader;
+use LlmChooser\Preset\Preset;
 use LlmChooser\Process\Instance;
 use LlmChooser\Process\InstanceCollection;
 
@@ -151,13 +154,21 @@ final class ChatProxy
 			if (!$p->enabled) {
 				continue;
 			}
-			$data[] = [
+			$entry = [
 				'id'       => $p->args->alias !== '' ? $p->args->alias : $p->id,
 				'object'   => 'model',
 				'owned_by' => 'llmchooser',
 				'preset'   => $p->id,
 				'status'   => isset($running[$p->id]) ? $running[$p->id]->status : Instance::STOPPED,
 			];
+			// Omitted rather than published as null: an unreadable GGUF
+			// header is no reason to publish a context_length that might
+			// mislead a client into caching a wrong number.
+			$ctx = $this->contextLength($p);
+			if ($ctx !== null) {
+				$entry['context_length'] = $ctx;
+			}
+			$data[] = $entry;
 		}
 
 		// Broken files are NOT listed here (GUI-DESIGN §4): an entry whose
@@ -166,6 +177,33 @@ final class ChatProxy
 		// broken_config on error responses, and the explicit-name 422 below.
 
 		$this->json($out, 200, ['object' => 'list', 'data' => $data]);
+	}
+
+	/**
+	 * The effective prompt context in tokens: the preset's configured
+	 * --ctx-size, or (when that is 0, meaning "model default") the GGUF
+	 * header's trained context length. Clients like Hermes otherwise have
+	 * no way to know this and silently fall back to guessed family
+	 * defaults (GUI-DESIGN §4 follow-up, reported 2026-10-07: a client's
+	 * name-pattern guesser landed on 131072 for a 262144-context preset
+	 * because our preset ids can't contain a "." and so never match
+	 * dotted version patterns like "qwen3.8-flash").
+	 *
+	 * Null when the GGUF header can't be read (missing/corrupt file) —
+	 * callers should omit the field rather than publish a lie.
+	 */
+	private function contextLength(Preset $p): ?int
+	{
+		if ($p->args->ctx_size > 0) {
+			return $p->args->ctx_size;
+		}
+		try {
+			$trained = GgufReader::read($p->model_path)->contextLength();
+		}
+		catch (GgufException) {
+			return null;
+		}
+		return $trained > 0 ? $trained : null;
 	}
 
 	/** The preset/model the client explicitly asked for, if any. */

@@ -24,7 +24,7 @@ final class EngineForm
 		}
 
 		$out .= '<form method="post" action="' . $action . '">';
-		$out .= self::row('id', 'ID', self::input('id', $e->id, ['required', 'pattern' => '[A-Za-z0-9_-]+', 'readonly' => !$isNew]), self::err($errors, 'id'));
+		$out .= self::row('id', 'ID', self::input('id', $e->id, ['required', 'pattern' => '(?!\.)(?!.*\.\.)[A-Za-z0-9_.-]+(?&lt;!\.)', 'readonly' => !$isNew]), self::err($errors, 'id'));
 		$out .= self::row('name', 'Name', self::input('name', $e->name, ['required']), self::err($errors, 'name'));
 		$out .= self::row('binary_path_default', 'Binary path', self::input('binary_path_default', $e->binary_path_default, ['required', 'placeholder' => '/path/to/llama-server']), self::err($errors, 'binary_path_default'));
 		$out .= self::row('model_dir', 'Model directory', self::input('model_dir', $e->model_dir, ['placeholder' => 'directory scanned for .gguf models']), self::err($errors, 'model_dir'));

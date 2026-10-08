@@ -62,7 +62,7 @@ final class PresetForm
 		$out .= '<details open><summary>General</summary>';
 		$out .= self::fieldRow('enabled', self::checkbox('enabled', (bool)$p->enabled),
 			(bool)$p->enabled, (bool)$defaults->enabled, $help, self::err($errors, 'enabled'));
-		$out .= self::fieldRow('id', self::textInput('id', $p->id, $help, ['required', 'pattern' => '[A-Za-z0-9_-]+', 'readonly' => !$isNew]),
+		$out .= self::fieldRow('id', self::textInput('id', $p->id, $help, ['required', 'pattern' => '(?!\.)(?!.*\.\.)[A-Za-z0-9_.-]+(?&lt;!\.)', 'readonly' => !$isNew]),
 			$p->id, $defaults->id, $help, self::err($errors, 'id'));
 		$out .= self::fieldRow('name', self::textInput('name', $p->name, $help),
 			$p->name, $defaults->name, $help, self::err($errors, 'name'));

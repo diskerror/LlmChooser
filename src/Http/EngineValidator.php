@@ -15,8 +15,8 @@ final class EngineValidator
 	{
 		$errors = [];
 
-		if (!preg_match('/^[A-Za-z0-9_-]+$/', $e->id)) {
-			$errors['id'] = 'Only letters, digits, - and _';
+		if (!preg_match('/^(?!\.)(?!.*\.\.)[A-Za-z0-9_.-]+(?<!\.)$/', $e->id)) {
+			$errors['id'] = 'Only letters, digits, - . and _ (no leading/trailing dot, no "..")';
 		} elseif ($isNew) {
 			try {
 				$engines->load($e->id);

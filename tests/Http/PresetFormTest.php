@@ -106,7 +106,18 @@ class PresetFormTest extends TestCase
 
 		// bad id
 		$e = PresetValidator::validate(new Preset(['id' => '../x', 'name' => 'N', 'engine_id' => 'e', 'model_path' => '/x']), $engines, false, $presets);
-		$this->assertSame('Only letters, digits, - and _', $e['id']);
+		$this->assertSame('Only letters, digits, - . and _ (no leading/trailing dot, no "..")', $e['id']);
+
+		// dotted id is fine (model ids like "qwen3.8-flash" need it) ...
+		$e = PresetValidator::validate(new Preset(['id' => 'qwen3.8-flash', 'name' => 'N', 'engine_id' => 'e', 'model_path' => '/x']), $engines, false, $presets);
+		$this->assertArrayNotHasKey('id', $e);
+
+		// ... but ".." anywhere in the id is still rejected, and so are
+		// leading/trailing dots (both used as filenames verbatim).
+		foreach (['a..b', '.hidden', 'trailing.'] as $bad) {
+			$e = PresetValidator::validate(new Preset(['id' => $bad, 'name' => 'N', 'engine_id' => 'e', 'model_path' => '/x']), $engines, false, $presets);
+			$this->assertArrayHasKey('id', $e, "expected '{$bad}' to be rejected");
+		}
 
 		// duplicate id when new
 		$e = PresetValidator::validate(new Preset(['id' => 'p1', 'name' => 'N', 'engine_id' => 'e', 'model_path' => $this->dir . '/x.gguf']), $engines, true, $presets);

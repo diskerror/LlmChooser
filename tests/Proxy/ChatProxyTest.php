@@ -136,6 +136,52 @@ class ChatProxyTest extends TestCase
 		}
 	}
 
+	public function test_models_reports_context_length_from_gguf_header(): void
+	{
+		// Preset 'a' has ctx_size=0 ("model default"); the fixture gguf
+		// carries context_length=8192, which must surface so a client
+		// doesn't have to guess from the preset name (GUI-DESIGN §4
+		// follow-up).
+		$em = $this->proxyRun($this->req('GET', '/v1/models'));
+		$data = $em->json()['data'];
+		foreach ($data as $m) {
+			if ($m['preset'] === 'a') {
+				$this->assertSame(8192, $m['context_length']);
+			}
+		}
+	}
+
+	public function test_models_reports_configured_ctx_size_over_gguf_default(): void
+	{
+		$this->app->presets->save(new Preset([
+			'id' => 'c', 'name' => 'C', 'engine_id' => 'e',
+			'model_path' => $this->dir . '/models/m.gguf',
+			'args' => ['ctx_size' => 32768],
+		]));
+		$em = $this->proxyRun($this->req('GET', '/v1/models'));
+		$data = $em->json()['data'];
+		foreach ($data as $m) {
+			if ($m['preset'] === 'c') {
+				$this->assertSame(32768, $m['context_length']);
+			}
+		}
+	}
+
+	public function test_models_omits_context_length_for_unreadable_model(): void
+	{
+		$this->app->presets->save(new Preset([
+			'id' => 'd', 'name' => 'D', 'engine_id' => 'e',
+			'model_path' => $this->dir . '/models/missing.gguf',
+		]));
+		$em = $this->proxyRun($this->req('GET', '/v1/models'));
+		$data = $em->json()['data'];
+		foreach ($data as $m) {
+			if ($m['preset'] === 'd') {
+				$this->assertArrayNotHasKey('context_length', $m);
+			}
+		}
+	}
+
 	public function test_nothing_running_is_400(): void
 	{
 		$em = $this->proxyRun($this->req('POST', '/v1/chat/completions', [], $this->jsonHeaders(), '{"model":"x"}'));
