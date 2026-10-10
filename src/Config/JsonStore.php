@@ -7,6 +7,8 @@ namespace LlmChooser\Config;
 use JsonException;
 use RuntimeException;
 
+use function Diskerror\Library\Json\decode as jsonDecode;
+
 /**
  * Shared JSON-file behaviour for the config repositories.
  *
@@ -46,7 +48,7 @@ trait JsonStore
 		}
 
 		try {
-			$data = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+			$data = jsonDecode($raw);
 		}
 		catch (JsonException $e) {
 			// Not worth quoting $e->getMessage(): it is always "Syntax error".

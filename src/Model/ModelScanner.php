@@ -10,6 +10,9 @@ use RecursiveCallbackFilterIterator;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 
+use function Diskerror\Library\Json\decode as jsonDecode;
+use function Diskerror\Library\Json\encode as jsonEncode;
+
 /**
  * Walks model roots, builds ModelEntry objects (shards collapsed, sidecars
  * attached) and caches read GGUF headers by path + size + mtime.
@@ -314,7 +317,7 @@ final class ModelScanner
 			return [];
 		}
 		try {
-			$cache = json_decode((string)file_get_contents($this->cacheFile), true, 512, JSON_THROW_ON_ERROR);
+			$cache = jsonDecode((string)file_get_contents($this->cacheFile));
 		}
 		catch (\JsonException) {
 			return [];
@@ -334,7 +337,7 @@ final class ModelScanner
 		}
 		file_put_contents(
 			$this->cacheFile,
-			json_encode($cache, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR)
+			jsonEncode($cache, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE)
 		);
 	}
 

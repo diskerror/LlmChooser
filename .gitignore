@@ -15,3 +15,4 @@
 
 # Runtime instance state; rebuilt by reconciling against real processes.
 /storage/runtime_state.json
+.DS_Store

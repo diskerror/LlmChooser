@@ -5,12 +5,18 @@
     "prefer-stable": true,
     "require": {
         "php": ">=8.1",
-        "diskerror/typed": "*"
+        "diskerror/typed": "*",
+        "diskerror/p_lib": "*"
     },
     "repositories": [
         {
             "type": "path",
             "url": "../Typed",
+            "options": { "symlink": true }
+        },
+        {
+            "type": "path",
+            "url": "../p_lib",
             "options": { "symlink": true }
         }
     ],
