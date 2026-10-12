@@ -167,6 +167,29 @@ class ChatProxyTest extends TestCase
 		}
 	}
 
+	public function test_models_reports_per_slot_context_when_parallel(): void
+	{
+		$this->app->presets->save(new Preset([
+			'id' => 'p', 'name' => 'P', 'engine_id' => 'e',
+			'model_path' => $this->dir . '/models/m.gguf',
+			'args' => ['ctx_size' => 262144, 'parallel' => 4],
+		]));
+		$this->app->presets->save(new Preset([
+			'id' => 'u', 'name' => 'U', 'engine_id' => 'e',
+			'model_path' => $this->dir . '/models/m.gguf',
+			'args' => ['ctx_size' => 262144, 'parallel' => -1],
+		]));
+		$em = $this->proxyRun($this->req('GET', '/v1/models'));
+		foreach ($em->json()['data'] as $m) {
+			if ($m['preset'] === 'p') {
+				$this->assertSame(65536, $m['context_length']);
+			}
+			if ($m['preset'] === 'u') {
+				$this->assertSame(262144, $m['context_length']);
+			}
+		}
+	}
+
 	public function test_models_omits_context_length_for_unreadable_model(): void
 	{
 		$this->app->presets->save(new Preset([
@@ -237,20 +260,20 @@ class ChatProxyTest extends TestCase
 		$this->assertStringContainsString('Several presets', $em->json()['error']['message']);
 	}
 
-	public function test_stopped_preset_503(): void
+	public function test_stopped_preset_is_autostarted(): void
 	{
 		$this->startReady('a');
 		$em = $this->proxyRun($this->req('POST', '/v1/chat/completions', ['preset' => 'b'], $this->jsonHeaders(), '{}'));
-		$this->assertSame(503, $em->code);
+		$this->assertSame(200, $em->code);
+		$this->assertSame('ready', $this->app->state->get('b')->status);
 	}
 
-	public function test_loading_is_503(): void
+	public function test_loading_preset_is_waited_for(): void
 	{
-		putenv('FAKE_LOAD_MS=5000');
+		putenv('FAKE_LOAD_MS=1500');
 		$this->app->processes->start('a');
 		$em = $this->proxyRun($this->req('POST', '/v1/chat/completions', ['preset' => 'a'], $this->jsonHeaders(), '{}'));
-		$this->assertSame(503, $em->code);
-		$this->assertStringContainsString('still loading', $em->json()['error']['message']);
+		$this->assertSame(200, $em->code);
 	}
 
 	public function test_streaming_passes_chunks_through(): void
@@ -279,7 +302,8 @@ class ChatProxyTest extends TestCase
 		(new ProcessControl())->signal($a->pid, 'KILL');
 		usleep(300000);
 		$em = $this->proxyRun($this->req('POST', '/v1/chat/completions', ['preset' => 'a'], $this->jsonHeaders(), '{}'));
-		$this->assertContains($em->code, [502, 503]);
+		// an errored instance is restarted on demand
+		$this->assertSame(200, $em->code);
 	}
 
 	public function test_response_headers(): void

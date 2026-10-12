@@ -247,4 +247,63 @@ class ProcessManagerTest extends TestCase
         $this->expectExceptionMessageMatches('/disabled/i');
         $this->pm->start('p1');
     }
+
+    /** A ProcessControl with a canned process list that records signals. */
+    private function stubProc(array $list, array &$signals): ProcessControl
+    {
+        return new class($list, $signals) extends ProcessControl {
+            public function __construct(private array $list, private array &$signals) {}
+            public function listProcesses(): array { return $this->list; }
+            public function isAlive(int $pid): bool { return false; }
+            public function signal(int $pid, string $signal): void { $this->signals[] = "$signal:$pid"; }
+        };
+    }
+
+    public function test_orphans_only_lists_our_binaries_and_untracked_pids(): void
+    {
+        $bin = $this->engines->load('e')->binary_path_default;
+        $signals = [];
+        $proc = $this->stubProc([
+            ['pid' => 111, 'rss' => 1024, 'args' => "$bin --port 5851 --model /m/big.gguf"],
+            ['pid' => 222, 'rss' => 1024, 'args' => "/usr/bin/php $bin --port 5852 --model /m/b.gguf"],
+            ['pid' => 333, 'rss' => 1024, 'args' => '/other/llama-server --port 9999'],
+            ['pid' => 444, 'rss' => 1024, 'args' => "$bin --port 5853"],
+        ], $signals);
+        // 444 is tracked in state, so it is not an orphan.
+        $this->state->update(function ($c): void {
+            $c['t'] = new Instance(['preset_id' => 't', 'pid' => 444, 'port' => 5853, 'status' => Instance::READY]);
+        });
+        $pm = $this->managerWith($proc);
+
+        $o = $pm->orphans();
+        $this->assertSame([111, 222], array_column($o, 'pid'));
+        $this->assertSame('5851', $o[0]['port']);
+        $this->assertSame('big.gguf', $o[0]['model']);
+
+        $this->assertSame(1, $pm->killOrphans(222));
+        $this->assertSame(['TERM:222'], $signals);
+        $signals = [];
+        $this->assertSame(2, $pm->killOrphans());
+        $this->assertSame(['TERM:111', 'TERM:222'], $signals);
+        // A pid that is not an orphan is never signalled.
+        $signals = [];
+        $this->assertSame(0, $pm->killOrphans(444));
+        $this->assertSame([], $signals);
+    }
+
+    private function managerWith(ProcessControl $proc): ProcessManager
+    {
+        $g = 1024 ** 3;
+        $topo = new MemoryTopology([
+            new Device('cpu', Device::KIND_RAM, 100 * $g, 100 * $g),
+            new Device('gpu0', Device::KIND_VRAM, $g / 2, 50 * $g, 'cpu'),
+        ]);
+        return new ProcessManager(
+            $this->presets, $this->engines, $this->state,
+            new MemoryService(new FixedTopologyProbe($topo)),
+            $this->dir . '/logs',
+            proc: $proc,
+            stopTimeoutSeconds: 2,
+        );
+    }
 }

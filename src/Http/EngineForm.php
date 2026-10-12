@@ -28,6 +28,7 @@ final class EngineForm
 		$out .= self::row('name', 'Name', self::input('name', $e->name, ['required']), self::err($errors, 'name'));
 		$out .= self::row('binary_path_default', 'Binary path', self::input('binary_path_default', $e->binary_path_default, ['required', 'placeholder' => '/path/to/llama-server']), self::err($errors, 'binary_path_default'));
 		$out .= self::row('model_dir', 'Model directory', self::input('model_dir', $e->model_dir, ['placeholder' => 'directory scanned for .gguf models']), self::err($errors, 'model_dir'));
+		$out .= self::row('metrics', 'Metrics endpoint', '<input type="hidden" name="metrics" value="0"><input type="checkbox" name="metrics" value="1"' . ($e->metrics ? ' checked' : '') . '> <span class="default">pass --metrics so the dashboard can show activity and token rates</span>', '');
 		$out .= self::row('host', 'Host', self::input('host', $e->host, ['required']), self::err($errors, 'host'));
 		$out .= self::row('port_min', 'Port range (min)', self::input('port_min', (string)$e->port_range->min, ['type' => 'number']), self::err($errors, 'port_range'));
 		$out .= self::row('port_max', 'Port range (max)', self::input('port_max', (string)$e->port_range->max, ['type' => 'number']), '');
@@ -48,6 +49,7 @@ final class EngineForm
 			'binary_path_default' => trim((string)($post['binary_path_default'] ?? '')),
 			'model_dir'           => trim((string)($post['model_dir'] ?? '')),
 			'host'                => trim((string)($post['host'] ?? '')),
+			'metrics'             => (string)($post['metrics'] ?? '1') !== '0',
 			'port_range'          => [
 				'min' => (int)($post['port_min'] ?? 0),
 				'max' => (int)($post['port_max'] ?? 0),

@@ -12,6 +12,7 @@ use LlmChooser\Memory\MemoryEstimator;
 use LlmChooser\Model\GgufInfo;
 use LlmChooser\Model\ModelEntry;
 use LlmChooser\Process\AdmissionException;
+use LlmChooser\Process\ActivityProbe;
 use LlmChooser\Process\Instance;
 use LlmChooser\Preset\Preset;
 use Throwable;
@@ -25,8 +26,11 @@ final class WebApp
 {
 	private Router $router;
 
-	public function __construct(private readonly App $app)
+	private ActivityProbe $activity;
+
+	public function __construct(private readonly App $app, ?ActivityProbe $activity = null)
 	{
+		$this->activity = $activity ?? new ActivityProbe();
 		$this->router = new Router();
 		$this->addRoutes();
 	}
@@ -58,6 +62,7 @@ final class WebApp
 		$rt->add('POST', '/presets/{id}/start', fn(Request $r, array $p): Response => $this->start($r, $p['id'], 'start'));
 		$rt->add('POST', '/presets/{id}/restart', fn(Request $r, array $p): Response => $this->start($r, $p['id'], 'restart'));
 		$rt->add('POST', '/presets/{id}/stop', fn(Request $r, array $p): Response => $this->stop($p['id']));
+		$rt->add('POST', '/orphans/kill', fn(Request $r): Response => $this->killOrphans($r));
 		$rt->add('POST', '/presets/{id}/estimate', fn(Request $r, array $p): Response => $this->estimate($r, $p['id']));
 		$rt->add('POST', '/presets/{id}/test', fn(Request $r, array $p): Response => $this->test($p['id']));
 		$rt->add('GET', '/presets/{id}/log', fn(Request $r, array $p): Response => $this->log($r, $p['id']));
@@ -100,6 +105,7 @@ final class WebApp
 			. '<tbody id="available-tbody">'
 			. ($available !== '' ? $available : '<tr><td colspan="6">Nothing available to start.</td></tr>')
 			. '</tbody></table></section>'
+			. $this->orphanSection()
 			. $this->brokenBanner();
 
 		return Response::html(Html::page('Dashboard', $body, $r->query('msg'), $head, $r->path, $this->headerSummary($instances)));
@@ -356,6 +362,10 @@ final class WebApp
 	{
 		$force = ($r->post['force'] ?? '') === '1';
 		try {
+			if ($op === 'start' && !$force) {
+				$evicted = $this->app->processes->startEvicting($id);
+				return Response::redirect('/', 'Starting ' . $id . ($evicted !== [] ? ' (unloaded ' . implode(', ', $evicted) . ')' : ''));
+			}
 			$this->app->processes->{$op}($id, force: $force);
 			return Response::redirect('/', ucfirst($op) . 'ing ' . $id);
 		} catch (AdmissionException $e) {
@@ -365,6 +375,39 @@ final class WebApp
 				. '<button type="submit" class="danger">Start anyway</button></form>';
 			return Response::html(Html::page('Not enough memory', $body, '', '', $r->path, $this->headerSummary($this->app->state->all())), 200);
 		}
+	}
+
+	/**
+	 * Servers running from our binaries that state does not know about.
+	 * Shown only when there are some, with per-row and kill-all buttons.
+	 */
+	private function orphanSection(): string
+	{
+		$orphans = $this->app->processes->orphans();
+		if ($orphans === []) {
+			return '';
+		}
+		$rows = '';
+		foreach ($orphans as $o) {
+			$rows .= '<tr><td>' . Html::e((string)$o['pid']) . '</td>'
+				. '<td>' . Html::e($o['port']) . '</td>'
+				. '<td>' . Html::e($o['model']) . '</td>'
+				. '<td>' . Html::e(Format::humanBytes($o['rss'])) . '</td>'
+				. '<td>' . Html::postButton('/orphans/kill?pid=' . $o['pid'], 'Kill') . '</td></tr>';
+		}
+		return '<section><h2>Untracked servers</h2>'
+			. '<p>These llama-server processes are running but LlmChooser has lost track of them. '
+			. 'They still hold memory (RSS here excludes GPU-held model memory).</p>'
+			. '<table><tr><th>PID</th><th>Port</th><th>Model</th><th>RSS</th><th>Actions</th></tr>' . $rows . '</table>'
+			. Html::postButton('/orphans/kill', 'Kill all untracked', 'danger', 'Kill all untracked llama-server processes?')
+			. '</section>';
+	}
+
+	private function killOrphans(Request $r): Response
+	{
+		$pid = $r->query('pid');
+		$n   = $this->app->processes->killOrphans($pid !== '' ? (int)$pid : null);
+		return Response::redirect('/', $n === 0 ? 'No untracked servers found' : "Stopped {$n} untracked server(s)");
 	}
 
 	private function stop(string $id): Response
@@ -934,7 +977,7 @@ final class WebApp
 			}
 			$rows .= '<tr><td><a href="/presets/' . Html::e($pid) . '/edit">' . Html::e($pid) . '</a></td>'
 				. '<td>' . Html::e($model) . '</td>'
-				. '<td>' . $this->badge($i->status) . '</td>'
+				. '<td>' . $this->statusCell($i) . '</td>'
 				. '<td>' . Html::e((string)($i->port ?: '-')) . '</td>'
 				. '<td>' . $this->ctxCell($p) . '</td>'
 				. '<td>' . ($alloc !== null ? Html::e(Format::humanBytes($alloc->totalBytes())) : '-') . '</td>'
@@ -1011,10 +1054,50 @@ final class WebApp
 		foreach ($result->perBudget as $r) {
 			$worst = max($worst, $r['need'] - $r['available']);
 		}
-		return [$est, '✗ needs ' . Format::humanBytes($worst) . ' more'];
+		return [$est, '<span class="fit-no">✗</span> needs ' . Format::humanBytes($worst) . ' more'];
 	}
 
 	/** Text badge per GUI-DESIGN.md §3: wording differs per status, CSS carries fill/outline. */
+	/**
+	 * The one status column. Loading and error keep their badges; a READY
+	 * instance shows what it is doing right now (ActivityProbe). Black text on
+	 * green for normal states, pale yellow for warnings; the words carry the
+	 * meaning, never colour alone. If /slots cannot be read (e.g. --no-slots)
+	 * the plain "ready" badge stands, since refresh() already health-checked it.
+	 */
+	private function statusCell(Instance $i): string
+	{
+		if ($i->status !== Instance::READY) {
+			return $this->badge($i->status);
+		}
+		$a = $this->activity->probe($i->host, $i->port);
+		if ($a['phase'] === ActivityProbe::UNREACHABLE) {
+			return $this->badge($i->status);
+		}
+		$k = static fn(int $n): string => rtrim(rtrim(number_format($n / 1024, 1), '0'), '.') . 'K';
+		switch ($a['phase']) {
+			case ActivityProbe::PROMPT:
+				$out = '<span class="badge badge-busy">prompt processing</span>';
+				break;
+			case ActivityProbe::GENERATING:
+				$out = '<span class="badge badge-busy">generating · ' . Html::e((string)$a['decoded']) . ' tok'
+					. ($a['gen_tps'] > 0 ? ' · ' . Html::e(number_format($a['gen_tps'], 1)) . ' t/s' : '') . '</span>';
+				break;
+			default:
+				$out = $this->badge($i->status);
+		}
+		if ($a['busy'] > 1 || ($a['busy'] > 0 && $a['slots'] > 1)) {
+			$out .= ' <span class="act-note">' . Html::e($a['busy'] . '/' . $a['slots']) . ' slots</span>';
+		}
+		// n_tokens_max is a high-water mark since start, not the current
+		// fill, so it is labelled "peak": once a slot has come within 10% of
+		// its limit, a stop at the limit is plausible.
+		if ($a['slot_ctx'] > 0 && $a['peak_ctx'] >= (int)($a['slot_ctx'] * 0.9)) {
+			$out .= ' <span class="badge badge-warn">ctx peak ' . Html::e($k($a['peak_ctx']) . '/' . $k($a['slot_ctx'])) . '</span>';
+		}
+		return $out;
+	}
+
 	private function badge(string $status): string
 	{
 		$label = match ($status) {

@@ -397,6 +397,25 @@ class WebAppTest extends TestCase
 		$this->assertStringNotContainsString('/presets/p1/edit', $available);
 	}
 
+	public function testStatusColumnShowsActivityInPlaceOfReady(): void
+	{
+		$this->post('/presets/p1/start');
+		$this->app->processes->waitUntilReady('p1', 30);
+		$probe = new class extends \LlmChooser\Process\ActivityProbe {
+			public function probe(string $host, int $port): array
+			{
+				return ['phase' => 'generating', 'busy' => 1, 'slots' => 1, 'decoded' => 42,
+					'slot_ctx' => 65536, 'peak_ctx' => 64000, 'gen_tps' => 7.5, 'prompt_tps' => 0.0];
+			}
+		};
+		$web    = new WebApp($this->app, $probe);
+		$loaded = $this->section($web->handle(new \LlmChooser\Http\Request('GET', '/', [], [], []))->body, 'Loaded');
+		$this->assertStringContainsString('badge-busy">generating · 42 tok · 7.5 t/s', $loaded);
+		$this->assertStringContainsString('badge-warn">ctx peak 62.5K/64K', $loaded);
+		$this->assertStringNotContainsString('badge-ready', $loaded);
+		$this->assertStringNotContainsString('Activity', $loaded);
+	}
+
 	public function testDashboardExcludesDisabledFromAvailable(): void
 	{
 		$this->app->presets->setEnabled('p1', false);
@@ -414,7 +433,7 @@ class WebAppTest extends TestCase
 		$this->app = $this->makeApp(0.5);
 		$this->web = new WebApp($this->app);
 		$available = $this->section($this->get('/')->body, 'Available');
-		$this->assertStringContainsString('✗ needs', $available);
+		$this->assertStringContainsString('fit-no">✗</span> needs', $available);
 		$this->assertStringContainsString('more', $available);
 	}
 

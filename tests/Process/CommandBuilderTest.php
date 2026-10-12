@@ -85,6 +85,22 @@ class CommandBuilderTest extends TestCase
         $this->assertSame('2', $argv[$i + 3]);
     }
 
+    public function test_metrics_follows_engine_and_is_never_doubled(): void
+    {
+        $off = new Engine(['id' => 'e', 'binary_path_default' => '/bin/llama-server', 'metrics' => false]);
+        $cmd = $this->builder->build(new Preset(['id' => 'p1', 'model_path' => '/m.gguf']), $off, 5850);
+        $this->assertNotContains('--metrics', $cmd->argv);
+
+        $plain = $this->builder->build(new Preset(['id' => 'p1', 'model_path' => '/m.gguf']), $this->engine(), 5850);
+        $this->assertSame(1, count(array_keys($plain->argv, '--metrics', true)));
+        $dup = $this->builder->build(
+            new Preset(['id' => 'p1', 'model_path' => '/m.gguf', 'args' => ['extra_flags' => '--metrics']]),
+            $this->engine(),
+            5850
+        );
+        $this->assertSame(1, count(array_keys($dup->argv, '--metrics', true)));
+    }
+
     public function test_extra_flags_appended_last(): void
     {
         $cmd = $this->builder->build(

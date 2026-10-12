@@ -69,7 +69,7 @@ if (loadedBody && availableBody) {
         if (data.available_html) availableBody.innerHTML = data.available_html;
       }
     } catch (e) { /* network hiccup: leave the stale table; meta-refresh covers it */ }
-  }, 5000);
+  }, 3000);
 }
 
 // Test button: POST /presets/{id}/test, show the result inline. One real

@@ -80,7 +80,11 @@ ul.errors li::before { content: "⚠ "; }
 	border: 1px solid var(--fg);
 	font-size: 12px;
 }
-.badge-ready    { background: var(--fg); color: #fff; }
+.badge-ready    { background: #c8e6c9; color: #000; border-color: #8fbf92; }
+.badge-busy  { background: #8fd19e; color: #000; border-color: #5fa870; }
+.badge-warn  { background: #fff3a0; color: #000; border-color: #c9b84a; }
+.act-note { font-size: 12px; color: var(--muted); }
+.fit-no { color: #d32f2f; font-weight: 700; }
 .badge-loading  { border-style: solid; animation: pulse 1.5s infinite; }
 .badge-error    { background: var(--fg); color: #fff; font-weight: 700; }
 .badge-error::before    { content: "⚠ "; }
@@ -180,7 +184,7 @@ input[type=text], input[type=number], textarea, select {
 	flex: 1;
 }
 input[readonly] { background: var(--bar); }
-input[type=checkbox] { flex: 0; max-width: none; min-width: 0; }
+input[type=checkbox] { flex: 0 0 auto; max-width: none; min-width: 0; }
 .form-actions { margin: 1rem 0; }
 
 pre {

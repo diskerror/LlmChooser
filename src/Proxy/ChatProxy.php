@@ -66,9 +66,27 @@ final class ChatProxy
 			return;
 		}
 
+		// A request naming a preset that is not up starts it, unloading the
+		// least-recently-used others if memory is short, then waits for it.
 		$inst = $running[$id] ?? null;
+		if ($named !== null && ($inst === null || !in_array($inst->status, [Instance::LOADING, Instance::READY], true))) {
+			try {
+				$this->app->processes->startEvicting($id);
+			} catch (\Throwable $e) {
+				$this->error($out, 503, "Preset '{$id}' could not be started: " . $e->getMessage());
+				return;
+			}
+		}
+		if ($named !== null) {
+			try {
+				$inst = $this->app->processes->waitUntilReady($id, 600);
+			} catch (\Throwable $e) {
+				$this->error($out, 503, "Preset '{$id}' is not running: " . $e->getMessage());
+				return;
+			}
+		}
 		if ($inst === null || $inst->status === Instance::ERROR) {
-			$this->error($out, 503, "Preset '{$id}' is not running.");
+			$this->error($out, 503, "Preset '{$id}' is not running." . ($inst !== null && $inst->message !== '' ? ' ' . $inst->message : ''));
 			return;
 		}
 		if ($inst->status === Instance::LOADING) {
@@ -180,8 +198,8 @@ final class ChatProxy
 	}
 
 	/**
-	 * The effective prompt context in tokens: the preset's configured
-	 * --ctx-size, or (when that is 0, meaning "model default") the GGUF
+	 * The effective prompt context in tokens PER CONVERSATION: the preset's
+	 * configured --ctx-size (divided among slots when --parallel N > 1), or (when that is 0, meaning "model default") the GGUF
 	 * header's trained context length. Clients like Hermes otherwise have
 	 * no way to know this and silently fall back to guessed family
 	 * defaults (GUI-DESIGN §4 follow-up, reported 2026-10-07: a client's
@@ -195,6 +213,17 @@ final class ChatProxy
 	private function contextLength(Preset $p): ?int
 	{
 		if ($p->args->ctx_size > 0) {
+			// With an explicit --parallel N > 1, llama-server gives each
+			// slot ctx_size / N (rounded down to a multiple of 256), and a
+			// conversation that outgrows ITS slot stops with "context
+			// full" even though the total is larger. A client needs the
+			// per-slot figure to know when to compress; reporting the
+			// total made Hermes never react (2026-10-11). parallel -1
+			// (auto) uses a unified pool, so the total stands.
+			$n = $p->args->parallel;
+			if ($n > 1) {
+				return max(256, intdiv(intdiv($p->args->ctx_size, $n), 256) * 256);
+			}
 			return $p->args->ctx_size;
 		}
 		try {

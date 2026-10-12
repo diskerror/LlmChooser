@@ -119,6 +119,11 @@ final class CommandBuilder
 				throw new RuntimeException('extra_flags must not set --host or --port');
 			}
 		}
+		// An engine property (the build either has /metrics or it does not).
+		// Skipped when extra_flags already carries it, so it is never doubled.
+		if ($engine->metrics && !in_array('--metrics', $extra, true)) {
+			$argv[] = '--metrics';
+		}
 		array_push($argv, ...$extra);
 
 		// The patched ngrams build links its own shared libraries.

@@ -48,6 +48,13 @@ final class ProcessManager
 			return $existing;
 		}
 
+		// An instance in error may still have a live process (e.g. "not ready
+		// after 600s" only gives up waiting; it does not kill the server).
+		// Replacing its state entry would orphan that process, so stop it.
+		if ($existing !== null) {
+			$this->stop($presetId);
+		}
+
 		$preset = $this->presets->load($presetId);
 		if (!$preset->enabled) {
 			throw new RuntimeException("Preset '{$presetId}' is disabled. Enable it first.");
@@ -119,6 +126,37 @@ final class ProcessManager
 		});
 
 		return $this->state->get($presetId);
+	}
+
+	/**
+	 * Start a preset, making room if needed: when admission refuses, stop
+	 * the least-recently-used OTHER instances one at a time until it fits.
+	 * Only if nothing is left to stop does the AdmissionException propagate.
+	 *
+	 * @return list<string> ids that were stopped to make room
+	 */
+	public function startEvicting(string $presetId, ?Instance &$started = null): array
+	{
+		$evicted = [];
+		while (true) {
+			try {
+				$started = $this->start($presetId);
+				return $evicted;
+			} catch (AdmissionException $e) {
+				$victims = [];
+				foreach ($this->state->all() as $i) {
+					if ($i->preset_id !== $presetId && in_array($i->status, [Instance::LOADING, Instance::READY], true)) {
+						$victims[] = $i;
+					}
+				}
+				if ($victims === []) {
+					throw $e;
+				}
+				usort($victims, static fn($a, $b): int => $a->last_used <=> $b->last_used);
+				$this->stop($victims[0]->preset_id);
+				$evicted[] = $victims[0]->preset_id;
+			}
+		}
 	}
 
 	/** Update statuses without waiting for anything. */
@@ -216,6 +254,75 @@ final class ProcessManager
 				}
 			}
 		});
+	}
+
+	/**
+	 * llama-server processes started from one of our engine binaries (or a
+	 * preset's binary override) that no recorded instance accounts for.
+	 * These are invisible to the dashboard, yet still hold their model in
+	 * memory. Matching on OUR binaries, not on the name "llama-server",
+	 * means an unrelated server someone else runs is never listed.
+	 *
+	 * @return list<array{pid:int,rss:int,port:string,model:string,args:string}>
+	 */
+	public function orphans(): array
+	{
+		$binaries = [];
+		foreach ($this->engines->loadAll() as $e) {
+			if ($e->binary_path_default !== '') {
+				$binaries[$e->binary_path_default] = true;
+			}
+		}
+		foreach ($this->presets->loadAll() as $p) {
+			if ($p->binary_path !== '') {
+				$binaries[$p->binary_path] = true;
+			}
+		}
+
+		$managed = [];
+		foreach ($this->state->all() as $i) {
+			$managed[$i->pid] = true;
+		}
+
+		$out = [];
+		foreach ($this->proc->listProcesses() as $p) {
+			if (isset($managed[$p['pid']]) || $p['pid'] === getmypid()) {
+				continue;
+			}
+			// argv[0], or argv[1] when the binary is a script run by an interpreter.
+			$tokens = preg_split('/\s+/', $p['args'], 3) ?: [];
+			if (!isset($binaries[$tokens[0] ?? '']) && !isset($binaries[$tokens[1] ?? ''])) {
+				continue;
+			}
+			$out[] = $p + [
+				'port'  => preg_match('/--port\s+(\d+)/', $p['args'], $m) ? $m[1] : '?',
+				'model' => preg_match('/--model\s+(\S+)/', $p['args'], $m) ? basename($m[1]) : '?',
+			];
+		}
+		return $out;
+	}
+
+	/**
+	 * Stop untracked servers: all of them, or just $pid. The list is always
+	 * recomputed here, so a PID from a stale page can never signal a process
+	 * that has since become something else.
+	 *
+	 * @return int how many were signalled
+	 */
+	public function killOrphans(?int $pid = null): int
+	{
+		$n = 0;
+		foreach ($this->orphans() as $o) {
+			if ($pid !== null && $o['pid'] !== $pid) {
+				continue;
+			}
+			$this->proc->signal($o['pid'], 'TERM');
+			if ($this->waitWhileAlive($o['pid'], $this->stopTimeoutSeconds)) {
+				$this->proc->signal($o['pid'], 'KILL');
+			}
+			$n++;
+		}
+		return $n;
 	}
 
 	/** @return InstanceCollection instances with status loading or ready */
