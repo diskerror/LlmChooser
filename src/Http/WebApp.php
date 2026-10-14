@@ -239,7 +239,7 @@ final class WebApp
 			}
 		}
 
-		return Response::html(Html::page('New preset', PresetForm::render($preset, $models, true, [], false, $this->app->engines->loadAll(), $this->presetEstimateBytes($preset)), $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all())));
+		return Response::html(Html::page('New preset', PresetForm::render($preset, $models, true, [], false, $this->app->engines->loadAll(), $this->presetEstimateBytes($preset), $this->presetHelpEntries($preset)), $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all())));
 	}
 
 	/**
@@ -283,7 +283,7 @@ final class WebApp
 		$errors = PresetValidator::validate($preset, $this->app->engines, true, $this->app->presets);
 		if ($errors !== []) {
 			return Response::html(
-				Html::page('New preset', PresetForm::render($preset, $this->app->modelScanner()->scan(), true, $errors, false, $this->app->engines->loadAll(), $this->presetEstimateBytes($preset)), '', '', $r->path, $this->headerSummary($this->app->state->all())),
+				Html::page('New preset', PresetForm::render($preset, $this->app->modelScanner()->scan(), true, $errors, false, $this->app->engines->loadAll(), $this->presetEstimateBytes($preset), $this->presetHelpEntries($preset)), '', '', $r->path, $this->headerSummary($this->app->state->all())),
 				422
 			);
 		}
@@ -300,7 +300,7 @@ final class WebApp
 		}
 		$running = $this->instanceIsLive($id);
 		return Response::html(
-			Html::page('Edit ' . $id, PresetForm::render($preset, $this->app->modelScanner()->scan(), false, [], $running, $this->app->engines->loadAll(), $this->presetEstimateBytes($preset)), $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all()))
+			Html::page('Edit ' . $id, PresetForm::render($preset, $this->app->modelScanner()->scan(), false, [], $running, $this->app->engines->loadAll(), $this->presetEstimateBytes($preset), $this->presetHelpEntries($preset)), $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all()))
 		);
 	}
 
@@ -324,7 +324,7 @@ final class WebApp
 		$errors = PresetValidator::validate($preset, $this->app->engines, false, $this->app->presets);
 		if ($errors !== []) {
 			return Response::html(
-				Html::page('Edit ' . $id, PresetForm::render($preset, $this->app->modelScanner()->scan(), false, $errors, $this->instanceIsLive($id), $this->app->engines->loadAll(), $this->presetEstimateBytes($preset)), '', '', $r->path, $this->headerSummary($this->app->state->all())),
+				Html::page('Edit ' . $id, PresetForm::render($preset, $this->app->modelScanner()->scan(), false, $errors, $this->instanceIsLive($id), $this->app->engines->loadAll(), $this->presetEstimateBytes($preset), $this->presetHelpEntries($preset)), '', '', $r->path, $this->headerSummary($this->app->state->all())),
 				422
 			);
 		}
@@ -845,6 +845,21 @@ final class WebApp
 	 * never drift. Deliberately not raw JSON + client templating — this
 	 * app renders all markup in PHP.
 	 */
+	/**
+	 * The engine's own option text for a preset's engine (its captured --help,
+	 * else the bundled snapshot). Never throws: help is decoration.
+	 *
+	 * @return array<string,array{flags:string,text:string}>
+	 */
+	private function presetHelpEntries(Preset $p): array
+	{
+		try {
+			return $this->app->help->forEngine($p->engine_id)['entries'];
+		} catch (Throwable) {
+			return $this->app->help->bundled()['entries'];
+		}
+	}
+
 	/** Worst-case RAM for a preset as currently posted by the form (not saved). */
 	private function presetEstimateBytes(Preset $p): ?int
 	{

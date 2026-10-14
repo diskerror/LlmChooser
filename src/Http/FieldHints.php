@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace LlmChooser\Http;
 
+use LlmChooser\Engine\HelpParser;
+
 /**
  * Widget choices the PHP types alone cannot express. Lists come from
  * DESIGN.md §10 and `llama-server --help`.
@@ -33,16 +35,40 @@ final class FieldHints
 		'Other'            => ['extra_flags'],
 	];
 
+	/**
+	 * $help plus, for every field whose flag exists in the engine's own --help,
+	 * the engine's wording ('upstream', 'upstream_flags') and whether it has
+	 * changed since our notes were reviewed ('stale'; needs a 'reviewed' hash).
+	 *
+	 * @param array<string,array<string,mixed>> $help
+	 * @param array<string,array{flags:string,text:string}> $entries from HelpParser::parse()
+	 * @return array<string,array<string,mixed>>
+	 */
+	public static function withUpstream(array $help, array $entries): array
+	{
+		$index = HelpParser::aliasIndex($entries);
+		foreach ($help as $name => $e) {
+			$m = HelpParser::match($entries, $index, (string)($e['flag'] ?? ''));
+			if ($m === null) {
+				continue;
+			}
+			$help[$name]['upstream']       = $m['text'];
+			$help[$name]['upstream_flags'] = $m['flags'];
+			$help[$name]['stale']          = isset($e['reviewed']) && $e['reviewed'] !== HelpParser::hash($m['text']);
+		}
+		return $help;
+	}
+
 	public const HELP_FILE = __DIR__ . '/../../resources/field_help.json';
 
-	/** @var array<string, array{label:string,flag:string,level:string,upstream_default:string,short:string,full:string}>|null */
+	/** @var array<string, array{label:string,flag:string,level:string,upstream_default:string,short:string,notes:string,reviewed?:string}>|null */
 	private static ?array $loaded = null;
 
 	/**
 	 * Field help from resources/field_help.json, the single source of the
 	 * help shown on the preset form. Loaded once per request.
 	 *
-	 * @return array<string, array{label:string,flag:string,level:string,upstream_default:string,short:string,full:string}>
+	 * @return array<string, array{label:string,flag:string,level:string,upstream_default:string,short:string,notes:string,reviewed?:string}>
 	 */
 	public static function load(): array
 	{

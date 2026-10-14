@@ -247,3 +247,9 @@ dialog.engine-picker-dialog::backdrop { background: rgba(0, 0, 0, .35); }
 
 /* numeric columns: fixed one-decimal values, so right-aligned = decimal-aligned */
 th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* help: llama.cpp's own wording, then our notes (separate paragraphs) */
+.help p { margin: .4rem 0 0; }
+.help .help-src { font-weight: 600; color: var(--muted); }
+.help .help-upstream { border-left: 3px solid var(--line); padding-left: .5rem; }
+.help .help-stale { color: #a00; font-weight: 600; }

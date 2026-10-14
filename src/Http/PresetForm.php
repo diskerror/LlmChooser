@@ -27,10 +27,13 @@ final class PresetForm
 	 * @param list<ModelEntry> $models
 	 * @param array<string,string> $errors field ('args.x' for args) => message
 	 */
-	public static function render(Preset $p, array $models, bool $isNew, array $errors = [], bool $running = false, ?EngineCollection $engines = null, ?int $estimateBytes = null): string
+	public static function render(Preset $p, array $models, bool $isNew, array $errors = [], bool $running = false, ?EngineCollection $engines = null, ?int $estimateBytes = null, ?array $engineHelp = null): string
 	{
 		$action = $isNew ? '/presets/new' : '/presets/' . Html::e($p->id) . '/edit';
 		$help   = FieldHints::load();
+		if ($engineHelp !== null) {
+			$help = FieldHints::withUpstream($help, $engineHelp);
+		}
 		$defaults = new Preset();
 		$argDefaults = new PresetArgs();
 
@@ -205,7 +208,8 @@ final class PresetForm
 		// be prominent either: label = raw name, level = advanced.
 		$label = $entry['label'] ?? $name;
 		$level = ($entry['level'] ?? 'advanced') === 'basic' ? 'basic' : 'advanced';
-		$full  = $entry['full'] ?? '';
+		$notes = $entry['notes'] ?? '';
+		$up    = $entry['upstream'] ?? '';
 		$flag  = $entry['flag'] ?? '';
 		$updef = $entry['upstream_default'] ?? '';
 
@@ -220,7 +224,9 @@ final class PresetForm
 		// Error rows get their help forced open (GUI-DESIGN.md §4).
 		$helpHtml = '<div class="help"' . ($error !== '' ? '' : ' hidden') . '>'
 			. ($flag !== '' && $flag !== '(none)' ? '<code class="flag">' . Html::e($flag) . '</code> ' : '')
-			. nl2br(Html::e($full))
+			. ($up !== '' ? '<p class="help-upstream"><span class="help-src">llama.cpp:</span> ' . Html::e($up) . '</p>' : '')
+			. ($notes !== '' ? '<p class="help-notes">' . nl2br(Html::e($notes)) . '</p>' : '')
+			. (!empty($entry['stale']) ? '<p class="help-stale">⚠ llama.cpp\'s text for this option has changed since these notes were reviewed.</p>' : '')
 			. '</div>';
 		$errHtml = $error !== ''
 			? '<div class="field-error">⚠ <strong>' . Html::e($error) . '</strong></div>'

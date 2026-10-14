@@ -62,8 +62,8 @@ class FieldHelpTest extends TestCase
 				$this->assertIsString($entry[$key] ?? null, "{$name}.{$key} missing or not a string");
 				$this->assertNotSame('', trim($entry[$key]), "{$name}.{$key} is empty");
 			}
-			// 'full' may legitimately be short, but never absent.
-			$this->assertIsString($entry['full'] ?? null, "{$name}.full missing");
+			// 'notes' (ours, beyond llama.cpp's text) may legitimately be short, but never absent.
+			$this->assertIsString($entry['notes'] ?? null, "{$name}.notes missing");
 		}
 	}
 
@@ -72,5 +72,24 @@ class FieldHelpTest extends TestCase
 		foreach (FieldHints::load() as $name => $entry) {
 			$this->assertContains($entry['level'], ['basic', 'advanced'], "{$name}.level = '{$entry['level']}'");
 		}
+	}
+
+	public function test_every_flagged_field_exists_in_the_bundled_llama_help(): void
+	{
+		$entries = \LlmChooser\Engine\HelpParser::parse((string)file_get_contents(__DIR__ . '/../../docs/llama-server-help.txt'));
+		$index   = \LlmChooser\Engine\HelpParser::aliasIndex($entries);
+		foreach (FieldHints::load() as $name => $entry) {
+			if (\LlmChooser\Engine\HelpParser::tokens($entry['flag']) === []) {
+				continue; // LlmChooser-only field ("(none)")
+			}
+			$this->assertNotNull(\LlmChooser\Engine\HelpParser::match($entries, $index, $entry['flag']), "{$name}: '{$entry['flag']}' not in llama-server --help");
+		}
+	}
+
+	public function test_reviewed_hashes_match_the_bundled_text(): void
+	{
+		$entries = \LlmChooser\Engine\HelpParser::parse((string)file_get_contents(__DIR__ . '/../../docs/llama-server-help.txt'));
+		$stale   = array_filter(FieldHints::withUpstream(FieldHints::load(), $entries), static fn(array $e): bool => !empty($e['stale']));
+		$this->assertSame([], array_keys($stale), 'notes need review: run help-review');
 	}
 }

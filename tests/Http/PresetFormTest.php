@@ -294,13 +294,43 @@ class PresetFormTest extends TestCase
 
 	public function testRenderFullHelpTextPresentButHidden(): void
 	{
-		$full = FieldHints::load()['ctx_size']['full'];
+		$full = FieldHints::load()['ctx_size']['notes'];
 		$html = PresetForm::render(new Preset(['id' => 'p', 'engine_id' => 'e']), $this->models(), false);
 		$firstParagraph = htmlspecialchars(explode("\n", $full)[0], ENT_QUOTES);
 		$this->assertStringContainsString('<div class="help" hidden>', $html);
 		$this->assertStringContainsString($firstParagraph, $html);
 		// the real CLI flag is inside the help, not the label
 		$this->assertStringContainsString('<code class="flag">-c, --ctx-size</code>', $html);
+	}
+
+	public function testUpstreamTextAndNotesAreSeparateParagraphs(): void
+	{
+		$reviewed = FieldHints::load()['ctx_size']['reviewed'];
+		$text     = 'size of the prompt context (default: 0, 0 = loaded from model)';
+		$entries  = ['--ctx-size' => ['flags' => '-c, --ctx-size N', 'text' => $text]];
+		$html     = PresetForm::render(new Preset(['id' => 'p', 'engine_id' => 'e']), $this->models(), false, [], false, null, null, $entries);
+
+		$this->assertStringContainsString('<p class="help-upstream"><span class="help-src">llama.cpp:</span> ' . $text . '</p>', $html);
+		// our notes for the same field follow the upstream paragraph
+		$this->assertNotFalse(strpos($html, '<p class="help-notes">', strpos($html, 'help-upstream')));
+		// unchanged wording is not flagged
+		$this->assertSame(\LlmChooser\Engine\HelpParser::hash($text) !== $reviewed, str_contains($html, 'help-stale'));
+	}
+
+	public function testChangedUpstreamTextShowsStaleBadgeOnlyForThatField(): void
+	{
+		$entries = ['--ctx-size' => ['flags' => '-c, --ctx-size N', 'text' => 'completely different wording']];
+		$html    = PresetForm::render(new Preset(['id' => 'p', 'engine_id' => 'e']), $this->models(), false, [], false, null, null, $entries);
+		$this->assertSame(1, substr_count($html, 'class="help-stale"'));
+		$this->assertStringContainsString('changed since these notes were reviewed', $html);
+	}
+
+	public function testWithoutEngineHelpOnlyNotesAreShown(): void
+	{
+		$html = PresetForm::render(new Preset(['id' => 'p', 'engine_id' => 'e']), $this->models(), false);
+		$this->assertStringNotContainsString('help-upstream', $html);
+		$this->assertStringNotContainsString('help-stale', $html);
+		$this->assertStringContainsString('help-notes', $html);
 	}
 
 	public function testEnabledCheckboxRendersFirst(): void

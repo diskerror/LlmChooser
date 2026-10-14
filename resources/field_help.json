@@ -5,7 +5,7 @@
         "level": "basic",
         "upstream_default": "n/a",
         "short": "Unique name for this preset; used in URLs, the CLI and `?preset=`.",
-        "full": "Letters, digits, `-` and `_`. It is the file name in `storage/presets/`\nand the default API model name when no alias is set. Renaming is not\nediting: change the id by duplicating, then deleting the old preset, so the\nrunning instance and its log stay attached to the name they started with."
+        "notes": "Letters, digits, `-` and `_`. It is the file name in `storage/presets/`\nand the default API model name when no alias is set. Renaming is not\nediting: change the id by duplicating, then deleting the old preset, so the\nrunning instance and its log stay attached to the name they started with."
     },
     "name": {
         "label": "Display name",
@@ -13,7 +13,7 @@
         "level": "basic",
         "upstream_default": "n/a",
         "short": "Human-readable name shown in the dashboard.",
-        "full": "Free text. It is only for display, so clients never see it."
+        "notes": "Free text. It is only for display, so clients never see it."
     },
     "enabled": {
         "label": "Enabled",
@@ -21,7 +21,7 @@
         "level": "basic",
         "upstream_default": "n/a",
         "short": "Only enabled presets are offered to clients and can be started.",
-        "full": "A disabled preset is parked: it is not in `/v1/models`, the proxy refuses\nit, and it can't be started or set to start at boot. Its settings are kept,\nand it can still be edited, duplicated or deleted. Use this for\nexperiments, old versions you might go back to, or presets that need the\nwhole machine. That way an agent framework that picks \"the first model in\nthe list\" never lands on them. Disabling a running preset stops it first."
+        "notes": "A disabled preset is parked: it is not in `/v1/models`, the proxy refuses\nit, and it can't be started or set to start at boot. Its settings are kept,\nand it can still be edited, duplicated or deleted. Use this for\nexperiments, old versions you might go back to, or presets that need the\nwhole machine. That way an agent framework that picks \"the first model in\nthe list\" never lands on them. Disabling a running preset stops it first."
     },
     "engine_id": {
         "label": "Engine",
@@ -29,7 +29,7 @@
         "level": "basic",
         "upstream_default": "n/a",
         "short": "Which llama-server build runs this preset.",
-        "full": "Engines are defined in `config/engines/`. Each one names a `llama-server`\nbinary and the defaults that apply to it. Use a different engine when you\nneed a fork or a specially built version, for example the ngrams build for\nMTP drafting. Help text and allowed values in this form are written for\nthe n-gram/MTP build. Another engine may accept different values for\n`spec_type` or the cache types."
+        "notes": "Engines are defined in `config/engines/`. Each one names a `llama-server`\nbinary and the defaults that apply to it. Use a different engine when you\nneed a fork or a specially built version, for example the ngrams build for\nMTP drafting. Help text and allowed values in this form are written for\nthe n-gram/MTP build. Another engine may accept different values for\n`spec_type` or the cache types."
     },
     "binary_path": {
         "label": "Binary override",
@@ -37,7 +37,7 @@
         "level": "advanced",
         "upstream_default": "engine's binary",
         "short": "Use a different llama-server binary than the engine's.",
-        "full": "Leave this empty. It exists for one-off tests of a fresh build without\ncreating a new engine. LlmChooser sets `LD_LIBRARY_PATH` to the binary's\ndirectory, so shared libraries built next to it are found."
+        "notes": "Leave this empty. It exists for one-off tests of a fresh build without\ncreating a new engine. LlmChooser sets `LD_LIBRARY_PATH` to the binary's\ndirectory, so shared libraries built next to it are found."
     },
     "model_path": {
         "label": "Model",
@@ -45,7 +45,8 @@
         "level": "basic",
         "upstream_default": "(required)",
         "short": "The GGUF file to load.",
-        "full": "Pick a model from the scan. For split models (`-00001-of-00003.gguf`),\nchoose the first part; llama.cpp finds the rest. The Models tab shows how\nbig the model is, what its maximum context is, and what the KV cache will\ncost before you commit to a preset."
+        "notes": "Pick a model from the scan. For split models (`-00001-of-00003.gguf`),\nchoose the first part; llama.cpp finds the rest. The Models tab shows how\nbig the model is, what its maximum context is, and what the KV cache will\ncost before you commit to a preset.",
+        "reviewed": "842007e64c2a"
     },
     "mmproj_path": {
         "label": "Vision projector",
@@ -53,7 +54,8 @@
         "level": "basic",
         "upstream_default": "none (text only)",
         "short": "Multimodal projector file; enables image input.",
-        "full": "A vision model ships as two files: the language model and a small\n\"mmproj\" file that turns images into embeddings the model can read. Without\nit the model is text-only, even when it was trained on images. The mmproj\nmust come from the same model family and release as the main model, since\nmismatched projectors load fine but produce nonsense. It adds a few hundred\nMiB to a couple of GiB of memory and is offloaded to the GPU by default.\nLeave it empty if you don't send images; that saves memory and load time."
+        "notes": "A vision model ships as two files: the language model and a small\n\"mmproj\" file that turns images into embeddings the model can read. Without\nit the model is text-only, even when it was trained on images. The mmproj\nmust come from the same model family and release as the main model, since\nmismatched projectors load fine but produce nonsense. It adds a few hundred\nMiB to a couple of GiB of memory and is offloaded to the GPU by default.\nLeave it empty if you don't send images; that saves memory and load time.",
+        "reviewed": "865b48cbcaf3"
     },
     "model_draft_path": {
         "label": "Draft model",
@@ -61,7 +63,8 @@
         "level": "advanced",
         "upstream_default": "unused",
         "short": "Small model or MTP head used for speculative decoding.",
-        "full": "Speculative decoding: a cheap model guesses the next few tokens, and the\nbig model checks all the guesses in one pass. Correct guesses come almost\nfree, so generation gets faster with **identical** output, because the big\nmodel still decides every token. The draft must share the main model's\ntokenizer (same family). For `spec_type = draft-mtp`, this is the model's\nown multi-token-prediction head file rather than a separate model. See\nSpeculative decoding below. The draft also needs memory for its weights\nand KV cache."
+        "notes": "Speculative decoding: a cheap model guesses the next few tokens, and the\nbig model checks all the guesses in one pass. Correct guesses come almost\nfree, so generation gets faster with **identical** output, because the big\nmodel still decides every token. The draft must share the main model's\ntokenizer (same family). For `spec_type = draft-mtp`, this is the model's\nown multi-token-prediction head file rather than a separate model. See\nSpeculative decoding below. The draft also needs memory for its weights\nand KV cache.",
+        "reviewed": "db51b86efb37"
     },
     "ttl_seconds": {
         "label": "Idle unload after (s)",
@@ -69,7 +72,7 @@
         "level": "advanced",
         "upstream_default": "n/a",
         "short": "Stop the instance after this many idle seconds (0 = never).",
-        "full": "**Not enforced yet.** LlmChooser records the last-used time on every\nproxied request, but there is no idle-stop job yet (see DEPLOY.md). Once\nthere is one, this frees memory from models you forgot about, which is the\nbehaviour llama-swap has today."
+        "notes": "**Not enforced yet.** LlmChooser records the last-used time on every\nproxied request, but there is no idle-stop job yet (see DEPLOY.md). Once\nthere is one, this frees memory from models you forgot about, which is the\nbehaviour llama-swap has today."
     },
     "assigned_port": {
         "label": "Fixed port",
@@ -77,7 +80,8 @@
         "level": "advanced",
         "upstream_default": "8080 (LlmChooser instead picks a free port in 5800–5900)",
         "short": "Pin this preset to a port; empty = pick automatically.",
-        "full": "Only needed when a client talks to llama-server directly instead of\nthrough `/v1`. Normally leave it empty and use the proxy."
+        "notes": "Only needed when a client talks to llama-server directly instead of\nthrough `/v1`. Normally leave it empty and use the proxy.",
+        "reviewed": "e31970d8fe8a"
     },
     "notes": {
         "label": "Notes",
@@ -85,7 +89,7 @@
         "level": "basic",
         "upstream_default": "n/a",
         "short": "Free-form notes; not used by anything.",
-        "full": "Record why the preset exists and what you tuned. Your future self will want\nit.\n\n---\n\n## Context & memory"
+        "notes": "Record why the preset exists and what you tuned. Your future self will want\nit.\n\n---\n\n## Context & memory"
     },
     "ctx_size": {
         "label": "Context size",
@@ -93,7 +97,8 @@
         "level": "basic",
         "upstream_default": "0 (= model's trained context)",
         "short": "Size of the prompt context in tokens (0 = model's trained maximum).",
-        "full": "The context window holds the conversation, meaning the system prompt,\nhistory, tool output, and the reply being generated. When it fills,\ngeneration stops (or old tokens are dropped, see Context shift).\n\nCost: the KV cache grows linearly with context, and at long contexts it can\nexceed the model weights. The Models tab shows the cost per 1K tokens.\nRoughly, KV bytes ≈ ctx × layers × KV heads × head dim × 2 (K and V) ×\nbytes per element. GQA models (few KV heads) are cheap, older full-attention\nmodels are expensive.\n\nWith `parallel` > 1 the context is shared across slots: each slot gets\nctx_size ÷ parallel unless the build sizes a shared pool (see Parallel).\n\n0 means \"whatever the model was trained for\", read from the GGUF. That is\na reasonable default on a host with enough memory for it. Lower it\nto fit a bigger model, or to run several presets at once. Going above the\ntrained length requires RoPE/YaRN scaling (extra flags) and degrades\nquality."
+        "notes": "The context window holds the conversation, meaning the system prompt,\nhistory, tool output, and the reply being generated. When it fills,\ngeneration stops (or old tokens are dropped, see Context shift).\n\nCost: the KV cache grows linearly with context, and at long contexts it can\nexceed the model weights. The Models tab shows the cost per 1K tokens.\nRoughly, KV bytes ≈ ctx × layers × KV heads × head dim × 2 (K and V) ×\nbytes per element. GQA models (few KV heads) are cheap, older full-attention\nmodels are expensive.\n\nWith `parallel` > 1 the context is shared across slots: each slot gets\nctx_size ÷ parallel unless the build sizes a shared pool (see Parallel).\n\n0 means \"whatever the model was trained for\", read from the GGUF. That is\na reasonable default on a host with enough memory for it. Lower it\nto fit a bigger model, or to run several presets at once. Going above the\ntrained length requires RoPE/YaRN scaling (extra flags) and degrades\nquality.",
+        "reviewed": "c76301fa8792"
     },
     "n_predict": {
         "label": "Max reply tokens",
@@ -101,7 +106,8 @@
         "level": "advanced",
         "upstream_default": "-1 (no limit)",
         "short": "Maximum tokens to generate per reply (-1 = unlimited).",
-        "full": "A server-side cap. Clients normally send their own `max_tokens`, which takes\npriority per request. A cap here guards against runaway generation (a model\nstuck in a loop fills the whole context). With reasoning models, remember\nthat thinking tokens count, so a low cap can cut a model off mid-thought\nwith no answer at all."
+        "notes": "A server-side cap. Clients normally send their own `max_tokens`, which takes\npriority per request. A cap here guards against runaway generation (a model\nstuck in a loop fills the whole context). With reasoning models, remember\nthat thinking tokens count, so a low cap can cut a model off mid-thought\nwith no answer at all.",
+        "reviewed": "e4d9e7b6fbb1"
     },
     "batch_size": {
         "label": "Logical batch",
@@ -109,7 +115,8 @@
         "level": "advanced",
         "upstream_default": "2048",
         "short": "Max tokens submitted to the model per decode call.",
-        "full": "Prompt processing (reading your input) handles tokens in batches. This is\nthe logical batch, the most tokens the server hands over at once. It must be\n≥ ubatch_size. Raising it rarely helps on its own. Embedding and reranking\nmodels need batch ≥ the longest input. Leave it at 2048."
+        "notes": "Prompt processing (reading your input) handles tokens in batches. This is\nthe logical batch, the most tokens the server hands over at once. It must be\n≥ ubatch_size. Raising it rarely helps on its own. Embedding and reranking\nmodels need batch ≥ the longest input. Leave it at 2048.",
+        "reviewed": "34d497c1a01c"
     },
     "ubatch_size": {
         "label": "Physical batch",
@@ -117,7 +124,8 @@
         "level": "advanced",
         "upstream_default": "512",
         "short": "Tokens actually computed together on the device.",
-        "full": "The micro-batch the GPU really computes in one go. Larger values speed up\nprompt processing, especially on long prompts, at the cost of a bigger\ncompute buffer (hundreds of MiB to a few GiB). On an iGPU, 1024–2048\noften gives noticeably faster prompt reading; measure with a long prompt\nbefore and after. It has no effect on generation speed."
+        "notes": "The micro-batch the GPU really computes in one go. Larger values speed up\nprompt processing, especially on long prompts, at the cost of a bigger\ncompute buffer (hundreds of MiB to a few GiB). On an iGPU, 1024–2048\noften gives noticeably faster prompt reading; measure with a long prompt\nbefore and after. It has no effect on generation speed.",
+        "reviewed": "f915b945be18"
     },
     "flash_attn": {
         "label": "Flash attention",
@@ -125,7 +133,8 @@
         "level": "basic",
         "upstream_default": "auto",
         "short": "Fused attention kernel: on, off, or auto.",
-        "full": "Flash attention computes attention without building the full attention\nmatrix. It uses less memory, is usually faster, and is **required** for a\nquantized V cache (cache_type_v other than f16/bf16/f32). `auto` turns it on\nwhen the backend supports it for this model. Set `off` only to work around\na backend bug (garbled output or a crash that goes away without it)."
+        "notes": "Flash attention computes attention without building the full attention\nmatrix. It uses less memory, is usually faster, and is **required** for a\nquantized V cache (cache_type_v other than f16/bf16/f32). `auto` turns it on\nwhen the backend supports it for this model. Set `off` only to work around\na backend bug (garbled output or a crash that goes away without it).",
+        "reviewed": "641125a12f10"
     },
     "cache_type_k": {
         "label": "KV cache type (K)",
@@ -133,7 +142,8 @@
         "level": "basic",
         "upstream_default": "f16",
         "short": "Data type for the attention key cache.",
-        "full": "Quantizing the KV cache halves (q8_0) or quarters (q4_0) its memory, which\nmeans much longer contexts for the same RAM. Quality: q8_0 is practically\nlossless and the usual choice. q4_0/q4_1/iq4_nl are noticeably worse on long\nor precise tasks (code, retrieval from deep in context). K is more\nsensitive than V, so if you go below q8_0, keep K at q8_0 and lower only V.\nQuantized types can be a little slower on some backends."
+        "notes": "Quantizing the KV cache halves (q8_0) or quarters (q4_0) its memory, which\nmeans much longer contexts for the same RAM. Quality: q8_0 is practically\nlossless and the usual choice. q4_0/q4_1/iq4_nl are noticeably worse on long\nor precise tasks (code, retrieval from deep in context). K is more\nsensitive than V, so if you go below q8_0, keep K at q8_0 and lower only V.\nQuantized types can be a little slower on some backends.",
+        "reviewed": "2fc0e828bee6"
     },
     "cache_type_v": {
         "label": "KV cache type (V)",
@@ -141,7 +151,8 @@
         "level": "basic",
         "upstream_default": "f16",
         "short": "Data type for the attention value cache.",
-        "full": "Same choices as K. Quantized V **requires flash attention**, and the server\nrefuses to start without it. V tolerates quantization better than K:\n`K=q8_0, V=q4_0` is a reasonable memory-saving combination, while\n`K=q8_0, V=q8_0` is the safe default for long contexts."
+        "notes": "Same choices as K. Quantized V **requires flash attention**, and the server\nrefuses to start without it. V tolerates quantization better than K:\n`K=q8_0, V=q4_0` is a reasonable memory-saving combination, while\n`K=q8_0, V=q8_0` is the safe default for long contexts.",
+        "reviewed": "9b52134ef219"
     },
     "parallel": {
         "label": "Parallel slots",
@@ -149,7 +160,8 @@
         "level": "advanced",
         "upstream_default": "-1 (auto)",
         "short": "Number of requests served concurrently (-1 = auto).",
-        "full": "Each slot is an independent conversation, and the context is divided among\nthe slots: with a 262144 context and 4 slots each conversation gets only\n65536 tokens, and it stops when its own slot is full even if the total is\nnot. Several clients, or an agent plus\na subagent, can generate at once, and continuous batching interleaves\nthem. Total throughput rises, but each stream slows down.\n\nHow context is shared (from this build's source):\n\n- `ctx_size` is the **total** KV cache for all slots together. Memory\n  does not grow with `parallel`.\n- With an explicit `parallel` N, each slot gets ctx_size ÷ N (rounded to a\n  multiple of 256). So 4 slots on 128K give 32K per conversation.\n- With `parallel = -1` (auto), the server uses **4 slots and one unified KV\n  pool**. Every slot can use up to the whole context, but they share it,\n  so a long conversation in one slot leaves less for the others.\n- No slot ever exceeds the model's trained context.\n\n1 suits a single user and MTP/speculative drafting (the ngrams preset\nuses 1). Use 2–4 when several agents hit the same model."
+        "notes": "Each slot is an independent conversation, and the context is divided among\nthe slots: with a 262144 context and 4 slots each conversation gets only\n65536 tokens, and it stops when its own slot is full even if the total is\nnot. Several clients, or an agent plus\na subagent, can generate at once, and continuous batching interleaves\nthem. Total throughput rises, but each stream slows down.\n\nHow context is shared (from this build's source):\n\n- `ctx_size` is the **total** KV cache for all slots together. Memory\n  does not grow with `parallel`.\n- With an explicit `parallel` N, each slot gets ctx_size ÷ N (rounded to a\n  multiple of 256). So 4 slots on 128K give 32K per conversation.\n- With `parallel = -1` (auto), the server uses **4 slots and one unified KV\n  pool**. Every slot can use up to the whole context, but they share it,\n  so a long conversation in one slot leaves less for the others.\n- No slot ever exceeds the model's trained context.\n\n1 suits a single user and MTP/speculative drafting (the ngrams preset\nuses 1). Use 2–4 when several agents hit the same model.",
+        "reviewed": "2f299aa5496f"
     },
     "no_context_shift": {
         "label": "Disable context shift",
@@ -157,7 +169,8 @@
         "level": "advanced",
         "upstream_default": "disabled (context shift is off)",
         "short": "Stop with an error when the context fills, instead of dropping old tokens.",
-        "full": "With context shift on, a full context discards the oldest tokens (after the\nsystem prompt) and keeps generating. The conversation continues, but the\nmodel silently forgets its beginning, which is a frequent source of\nconfusing behaviour in agents. With it off (our default and llama.cpp's),\nthe request ends with a clear \"context full\" error, and the client can\nsummarise or truncate on purpose. Keep it disabled."
+        "notes": "With context shift on, a full context discards the oldest tokens (after the\nsystem prompt) and keeps generating. The conversation continues, but the\nmodel silently forgets its beginning, which is a frequent source of\nconfusing behaviour in agents. With it off (our default and llama.cpp's),\nthe request ends with a clear \"context full\" error, and the client can\nsummarise or truncate on purpose. Keep it disabled.",
+        "reviewed": "c8295629af3c"
     },
     "threads": {
         "label": "CPU threads",
@@ -165,7 +178,8 @@
         "level": "advanced",
         "upstream_default": "-1 (auto)",
         "short": "CPU threads for generation (-1 = auto).",
-        "full": "This only matters for the parts running on the CPU (layers not offloaded,\nor a pure CPU run). With everything on the GPU it barely matters. When the\nCPU does matter, the best value is usually the number of **physical**\ncores, not logical threads. More can be slower because of\nmemory-bandwidth contention.\n\n---\n\n## GPU"
+        "notes": "This only matters for the parts running on the CPU (layers not offloaded,\nor a pure CPU run). With everything on the GPU it barely matters. When the\nCPU does matter, the best value is usually the number of **physical**\ncores, not logical threads. More can be slower because of\nmemory-bandwidth contention.\n\n---\n\n## GPU",
+        "reviewed": "fb7b79ed3e3f"
     },
     "n_gpu_layers": {
         "label": "GPU layers",
@@ -173,7 +187,8 @@
         "level": "basic",
         "upstream_default": "auto",
         "short": "Layers to put on the GPU: a number, `auto`, or `all`.",
-        "full": "`all` puts every layer on the GPU (fastest, needs the most VRAM). `auto` lets\nllama.cpp fit as many as memory allows. A number offloads exactly that\nmany, and the rest run on the CPU, much slower. On a unified-memory host,\nRAM and VRAM are the same unified pool, so `all` is almost always right. Lower it only\nwhen memory is short and you accept a slowdown."
+        "notes": "`all` puts every layer on the GPU (fastest, needs the most VRAM). `auto` lets\nllama.cpp fit as many as memory allows. A number offloads exactly that\nmany, and the rest run on the CPU, much slower. On a unified-memory host,\nRAM and VRAM are the same unified pool, so `all` is almost always right. Lower it only\nwhen memory is short and you accept a slowdown.",
+        "reviewed": "238ab924a4a5"
     },
     "split_mode": {
         "label": "Multi-GPU split",
@@ -181,7 +196,8 @@
         "level": "advanced",
         "upstream_default": "layer",
         "short": "How to divide the model across GPUs.",
-        "full": "Irrelevant with one GPU. `layer` gives whole layers to each GPU,\nwhich is pipelined and the safe choice. `row` splits each matrix across GPUs\nand only helps with fast interconnects. `tensor` is newer tensor parallelism.\n`none` uses only `main_gpu`."
+        "notes": "Irrelevant with one GPU. `layer` gives whole layers to each GPU,\nwhich is pipelined and the safe choice. `row` splits each matrix across GPUs\nand only helps with fast interconnects. `tensor` is newer tensor parallelism.\n`none` uses only `main_gpu`.",
+        "reviewed": "4fa22a485d90"
     },
     "tensor_split": {
         "label": "GPU split ratios",
@@ -189,7 +205,8 @@
         "level": "advanced",
         "upstream_default": "proportional to free memory",
         "short": "Share of the model per GPU, e.g. `3,1`.",
-        "full": "Multi-GPU only. Ratios, not absolute sizes: `3,1` puts ¾ on GPU 0. Leave it\nempty on a single-GPU host."
+        "notes": "Multi-GPU only. Ratios, not absolute sizes: `3,1` puts ¾ on GPU 0. Leave it\nempty on a single-GPU host.",
+        "reviewed": "3e62a6a7dc5f"
     },
     "main_gpu": {
         "label": "Main GPU",
@@ -197,7 +214,8 @@
         "level": "advanced",
         "upstream_default": "0",
         "short": "GPU index for `split_mode none`/`row`.",
-        "full": "Multi-GPU only. Leave it at 0 on a single-GPU host.\n\n---\n\n## Sampling\n\nThese are server defaults. Most OpenAI-compatible clients send their own\ntemperature and top_p per request, and those override what is set here.\nModel cards often state recommended values; use them."
+        "notes": "Multi-GPU only. Leave it at 0 on a single-GPU host.\n\n---\n\n## Sampling\n\nThese are server defaults. Most OpenAI-compatible clients send their own\ntemperature and top_p per request, and those override what is set here.\nModel cards often state recommended values; use them.",
+        "reviewed": "f37f0a0dbda7"
     },
     "temp": {
         "label": "Temperature",
@@ -205,7 +223,8 @@
         "level": "basic",
         "upstream_default": "0.8",
         "short": "Randomness of token choice (0 = always most likely).",
-        "full": "Temperature divides the model's scores before picking a token. Low values\n(0.1–0.4) are focused and repeatable, good for code and tool calls. Around\n0.7–1.0 they are varied and creative. Above 1.2 output gets incoherent.\nReasoning models are usually tuned for 0.6–1.0 and get worse at 0, getting\nstuck in loops. Follow the model card."
+        "notes": "Temperature divides the model's scores before picking a token. Low values\n(0.1–0.4) are focused and repeatable, good for code and tool calls. Around\n0.7–1.0 they are varied and creative. Above 1.2 output gets incoherent.\nReasoning models are usually tuned for 0.6–1.0 and get worse at 0, getting\nstuck in loops. Follow the model card.",
+        "reviewed": "f1a8ec6fd44c"
     },
     "top_k": {
         "label": "Top-K",
@@ -213,7 +232,8 @@
         "level": "advanced",
         "upstream_default": "40",
         "short": "Only consider the K most likely tokens (0 = off).",
-        "full": "A hard cap on candidates per step. A blunt filter: min_p does the same job\nmore adaptively. Note the preset default is 20 (Qwen recommendation), not\nllama.cpp's 40."
+        "notes": "A hard cap on candidates per step. A blunt filter: min_p does the same job\nmore adaptively. Note the preset default is 20 (Qwen recommendation), not\nllama.cpp's 40.",
+        "reviewed": "cc1876c2d6ce"
     },
     "top_p": {
         "label": "Top-P (nucleus)",
@@ -221,7 +241,8 @@
         "level": "advanced",
         "upstream_default": "0.95",
         "short": "Keep the smallest set of tokens whose probability sums to P (1.0 = off).",
-        "full": "Cuts off the long tail of unlikely tokens. 0.9–0.95 is typical. Combined\nwith min_p it is mostly redundant. Many guides now suggest top_p = 1.0 plus\nmin_p alone."
+        "notes": "Cuts off the long tail of unlikely tokens. 0.9–0.95 is typical. Combined\nwith min_p it is mostly redundant. Many guides now suggest top_p = 1.0 plus\nmin_p alone.",
+        "reviewed": "4c7d69870e1b"
     },
     "min_p": {
         "label": "Min-P",
@@ -229,7 +250,8 @@
         "level": "advanced",
         "upstream_default": "0.05",
         "short": "Drop tokens less likely than P × the top token's probability (0 = off).",
-        "full": "An adaptive cutoff. When the model is confident, few alternatives\nsurvive; when it is unsure, many do. That keeps output coherent at higher\ntemperatures. 0.05–0.1 is a good general setting."
+        "notes": "An adaptive cutoff. When the model is confident, few alternatives\nsurvive; when it is unsure, many do. That keeps output coherent at higher\ntemperatures. 0.05–0.1 is a good general setting.",
+        "reviewed": "f8d29e88cf36"
     },
     "repeat_penalty": {
         "label": "Repeat penalty",
@@ -237,7 +259,8 @@
         "level": "advanced",
         "upstream_default": "1.0 (off)",
         "short": "Penalise recently used tokens (1.0 = off).",
-        "full": "The old anti-repetition tool. Values above 1.0 make recently seen tokens\nless likely, but they also punish legitimate repetition (code syntax,\nnames, JSON keys), so tool calls and code get worse. Leave it at 1.0 for\nmodern models. Use presence_penalty if a model loops."
+        "notes": "The old anti-repetition tool. Values above 1.0 make recently seen tokens\nless likely, but they also punish legitimate repetition (code syntax,\nnames, JSON keys), so tool calls and code get worse. Leave it at 1.0 for\nmodern models. Use presence_penalty if a model loops.",
+        "reviewed": "6cfa7b4d91b6"
     },
     "presence_penalty": {
         "label": "Presence penalty",
@@ -245,7 +268,8 @@
         "level": "advanced",
         "upstream_default": "0.0",
         "short": "Flat penalty on any token already used (OpenAI semantics).",
-        "full": "Pushes the model toward new words and topics. Qwen recommends 0–1.5 to\nreduce endless repetition in long thinking. Start at 0 and raise it only if\nyou see loops."
+        "notes": "Pushes the model toward new words and topics. Qwen recommends 0–1.5 to\nreduce endless repetition in long thinking. Start at 0 and raise it only if\nyou see loops.",
+        "reviewed": "b6be758ba3fd"
     },
     "frequency_penalty": {
         "label": "Frequency penalty",
@@ -253,7 +277,8 @@
         "level": "advanced",
         "upstream_default": "0.0",
         "short": "Penalty growing with how often a token has appeared.",
-        "full": "Like presence penalty, but scaled by count. It is rarely needed; leave it at 0."
+        "notes": "Like presence penalty, but scaled by count. It is rarely needed; leave it at 0.",
+        "reviewed": "9cd200446412"
     },
     "seed": {
         "label": "Seed",
@@ -261,7 +286,8 @@
         "level": "advanced",
         "upstream_default": "-1 (random)",
         "short": "Random seed (-1 = different every time).",
-        "full": "A fixed seed gives repeatable output for the same prompt and settings,\nwhich is useful when comparing presets. It is only repeatable with the\nsame build, slot, and batch configuration.\n\n---\n\n## Speculative decoding"
+        "notes": "A fixed seed gives repeatable output for the same prompt and settings,\nwhich is useful when comparing presets. It is only repeatable with the\nsame build, slot, and batch configuration.\n\n---\n\n## Speculative decoding",
+        "reviewed": "75f76296aef1"
     },
     "spec_type": {
         "label": "Speculative method",
@@ -269,7 +295,8 @@
         "level": "advanced",
         "upstream_default": "none",
         "short": "How draft tokens are produced for speculative decoding.",
-        "full": "All methods keep the output identical to normal decoding. They only change\nspeed, which depends on how often the drafts are accepted (shown in the\nserver log). Families:\n\n- `draft-simple`: a separate small model from the same family (`model_draft_path`). Classic speculative decoding.\n- `draft-mtp`: the model's own multi-token-prediction head. Models like Qwen3-Next / DeepSeek ship one; it is very accurate and cheap. The ngram engine's preset uses this with `spec_draft_n_max 2`.\n- `draft-eagle3`: an EAGLE-3 draft head trained for the specific model.\n- `ngram-*`: no draft model at all. Guesses come from repeating sequences already in the context. They are excellent for code editing, rewriting, and quoting (the output copies the input), and do nothing for fresh prose. They cost almost no memory.\n- `draft-dflash`: a small block-diffusion draft model trained for one specific target (e.g. `Qwen3-4B-DFlash` for Qwen3-4B), given as `model_draft_path`. It reads the target's hidden states and emits a whole block of draft tokens in one pass, rather than one at a time. Upstream example: `spec_draft_n_max 15`, `flash_attn on`.\n- `draft-dspark`: DFlash plus a small \"Markov head\" that conditions each position on the previous token, which recovers some left-to-right accuracy. The draft is a DeepSpec checkpoint for one target. Upstream example: `spec_draft_n_max 7`. Only Qwen3-backbone drafts are supported so far.\n- For both, `spec_draft_n_max` is clamped to the draft's trained block size, so setting it higher does nothing.\n\nThe field accepts a comma-separated list to combine methods. Expect\nroughly 1.3–2.5× faster generation when acceptance is high, and possibly a\nsmall slowdown when it is low."
+        "notes": "All methods keep the output identical to normal decoding. They only change\nspeed, which depends on how often the drafts are accepted (shown in the\nserver log). Families:\n\n- `draft-simple`: a separate small model from the same family (`model_draft_path`). Classic speculative decoding.\n- `draft-mtp`: the model's own multi-token-prediction head. Models like Qwen3-Next / DeepSeek ship one; it is very accurate and cheap. The ngram engine's preset uses this with `spec_draft_n_max 2`.\n- `draft-eagle3`: an EAGLE-3 draft head trained for the specific model.\n- `ngram-*`: no draft model at all. Guesses come from repeating sequences already in the context. They are excellent for code editing, rewriting, and quoting (the output copies the input), and do nothing for fresh prose. They cost almost no memory.\n- `draft-dflash`: a small block-diffusion draft model trained for one specific target (e.g. `Qwen3-4B-DFlash` for Qwen3-4B), given as `model_draft_path`. It reads the target's hidden states and emits a whole block of draft tokens in one pass, rather than one at a time. Upstream example: `spec_draft_n_max 15`, `flash_attn on`.\n- `draft-dspark`: DFlash plus a small \"Markov head\" that conditions each position on the previous token, which recovers some left-to-right accuracy. The draft is a DeepSpec checkpoint for one target. Upstream example: `spec_draft_n_max 7`. Only Qwen3-backbone drafts are supported so far.\n- For both, `spec_draft_n_max` is clamped to the draft's trained block size, so setting it higher does nothing.\n\nThe field accepts a comma-separated list to combine methods. Expect\nroughly 1.3–2.5× faster generation when acceptance is high, and possibly a\nsmall slowdown when it is low.",
+        "reviewed": "023c92bd5ef1"
     },
     "spec_draft_n_max": {
         "label": "Max draft tokens",
@@ -277,7 +304,8 @@
         "level": "advanced",
         "upstream_default": "3",
         "short": "How many tokens to guess ahead per step.",
-        "full": "More guesses mean bigger wins when they're right and more wasted work when\nthey're wrong. MTP heads are accurate for only 1–3 tokens (use 2). Small\ndraft models are good for 4–8. Ngram methods on repetitive text can use\n16+. Note the preset default is 16 versus llama.cpp's 3, which suits\nngram/draft models; **lower it for MTP**.\n\n---\n\n## Chat"
+        "notes": "More guesses mean bigger wins when they're right and more wasted work when\nthey're wrong. MTP heads are accurate for only 1–3 tokens (use 2). Small\ndraft models are good for 4–8. Ngram methods on repetitive text can use\n16+. Note the preset default is 16 versus llama.cpp's 3, which suits\nngram/draft models; **lower it for MTP**.\n\n---\n\n## Chat",
+        "reviewed": "74ee6306dab0"
     },
     "alias": {
         "label": "API model name",
@@ -285,7 +313,8 @@
         "level": "basic",
         "upstream_default": "model file name",
         "short": "Name clients use in `\"model\"`; empty = preset id.",
-        "full": "What `/v1/models` lists and what a client puts in its `model` field to\nreach this preset through the proxy. It must be unique across presets.\nUse a stable name (e.g. `qwen-coder`) so clients don't need reconfiguring\nwhen you swap the underlying file."
+        "notes": "What `/v1/models` lists and what a client puts in its `model` field to\nreach this preset through the proxy. It must be unique across presets.\nUse a stable name (e.g. `qwen-coder`) so clients don't need reconfiguring\nwhen you swap the underlying file.",
+        "reviewed": "964932bcd844"
     },
     "jinja": {
         "label": "Use model chat template",
@@ -293,7 +322,8 @@
         "level": "advanced",
         "upstream_default": "enabled",
         "short": "Format chats with the model's own Jinja template.",
-        "full": "The template turns messages into the exact token layout the model was\ntrained on. It is required for tool calling and reasoning models. Disable\nit only for old models with broken templates."
+        "notes": "The template turns messages into the exact token layout the model was\ntrained on. It is required for tool calling and reasoning models. Disable\nit only for old models with broken templates.",
+        "reviewed": "13457867ec81"
     },
     "reasoning_effort": {
         "label": "Reasoning effort",
@@ -301,7 +331,8 @@
         "level": "basic",
         "upstream_default": "default (template decides)",
         "short": "How hard reasoning models think before answering.",
-        "full": "For models that support it (gpt-oss, some Qwen/DeepSeek variants), this\ntrades answer quality against time and tokens. `low` is fast and fine for\nchat. `high`/`max` suits hard maths and code, but can think for thousands\nof tokens. Models without an effort control ignore it. Clients can usually\noverride it per request.\n\n---\n\n## Other"
+        "notes": "For models that support it (gpt-oss, some Qwen/DeepSeek variants), this\ntrades answer quality against time and tokens. `low` is fast and fine for\nchat. `high`/`max` suits hard maths and code, but can think for thousands\nof tokens. Models without an effort control ignore it. Clients can usually\noverride it per request.\n\n---\n\n## Other",
+        "reviewed": "2e43c9cd231e"
     },
     "extra_flags": {
         "label": "Extra flags",
@@ -309,6 +340,6 @@
         "level": "advanced",
         "upstream_default": "none",
         "short": "Any other llama-server options, appended to the command line.",
-        "full": "This is the escape hatch for everything without its own field, e.g.\n`--fit off --lazy-mode on --metrics`, `--rope-scaling yarn`,\n`--threads-batch 16`. Not allowed: `--host`, `--port` (LlmChooser owns\nthem). If you find yourself using a flag in many presets, ask for it to\nbecome a real field."
+        "notes": "This is the escape hatch for everything without its own field, e.g.\n`--fit off --lazy-mode on --metrics`, `--rope-scaling yarn`,\n`--threads-batch 16`. Not allowed: `--host`, `--port` (LlmChooser owns\nthem). If you find yourself using a flag in many presets, ask for it to\nbecome a real field."
     }
 }
