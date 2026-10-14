@@ -1,4 +1,47 @@
-# Installing LlmChooser (Debian / Ubuntu)
+# LlmChooser
+
+A small web app that manages [llama.cpp](https://github.com/ggml-org/llama.cpp)
+`llama-server` instances: pick a model, tune its settings, start and stop it,
+and see what it costs in memory before you load it.
+
+> **Status: beta.** LlmChooser is in daily use but still changing: settings
+> formats, the memory estimator's calibration and some features may change
+> without notice. There is no authentication or TLS; run it on a trusted LAN
+> only.
+
+## Motivation
+
+- **A GUI for settings.** llama-server has a long list of flags; a form beats
+  a shell history.
+- **Hands-on understanding.** Seeing every setting, its default and what it
+  does is a good way to learn what the knobs actually change.
+- **See the memory a model really needs.** Weights, KV cache and the rest add
+  up to more than the file size, and loading a model that doesn't fit is a slow
+  way to find out.
+- **Separate presets for the same model.** One model file, several presets
+  (for example creative vs. precise sampling, or different context sizes),
+  each with its own settings.
+- **N-gram drafts.** Presets and engines that use speculative drafting with
+  n-gram tables and MTP draft models needed first-class handling.
+- **Clearer help.** Each setting has a short hint, with full help one click
+  away.
+
+## What you get
+
+- Manages `llama-server`: start, stop and restart presets, with a dashboard
+  showing what is loaded, what is available and how much memory is in use.
+- A choice of help detail: short hints by default, full help on request.
+- A live estimate of the memory a preset needs, updated as you edit its
+  settings.
+- A web-based GUI.
+- Served by PHP or any HTTP server that can talk to PHP. Tested with nginx and
+  php8.4-fpm, and with PHP's built-in server (see below).
+- Written and tested with PHP 8.4 (the test suite also passes on 8.1–8.5).
+
+You also need a built `llama-server` (llama.cpp) on the machine that will run
+the models.
+
+## Installing (Debian / Ubuntu)
 
 LlmChooser is a single front-controller PHP app (`public/index.php`). This
 covers two ways to run it on a home LAN:
@@ -7,8 +50,9 @@ covers two ways to run it on a home LAN:
 - **`php -S`** — quick/dev-only, see [Limitations](#php--s-limitations) below.
 
 Build/toolchain requirements:
-- PHP **>= 8.4** with the `php-fpm`, `php-cli`, and the extensions your
-  `composer.json` deps need (check `diskerror/typed` for anything beyond
+- PHP **8.4** recommended (it is what Debian 13 ships); tested on 8.1–8.5.
+  `composer.json` requires >= 8.1. Install `php-fpm`, `php-cli` and the
+  extensions your `composer.json` deps need (check `diskerror/typed` for anything beyond
   core — it has no extra extension requirements as of this writing).
 - Composer, to install vendor deps (not vendored in the repo).
 
@@ -38,8 +82,8 @@ sudo chown -R www-data:www-data storage/
 > local absolute paths into `composer.json` — keep machine-specific paths
 > out of version control.
 
-Check Ubuntu's default PHP version first — Ubuntu 24.04 ships PHP 8.3, not
-8.4. Use the `ppa:ondrej/php` PPA if your distro's PHP is older than 8.4:
+Check Ubuntu's default PHP version first — Ubuntu 24.04 ships PHP 8.3, which
+works, but not the recommended 8.4. To get 8.4, use the `ppa:ondrej/php` PPA:
 
 ```bash
 sudo add-apt-repository ppa:ondrej/php
