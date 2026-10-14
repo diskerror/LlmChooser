@@ -27,7 +27,7 @@ final class PresetForm
 	 * @param list<ModelEntry> $models
 	 * @param array<string,string> $errors field ('args.x' for args) => message
 	 */
-	public static function render(Preset $p, array $models, bool $isNew, array $errors = [], bool $running = false, ?EngineCollection $engines = null): string
+	public static function render(Preset $p, array $models, bool $isNew, array $errors = [], bool $running = false, ?EngineCollection $engines = null, ?int $estimateBytes = null): string
 	{
 		$action = $isNew ? '/presets/new' : '/presets/' . Html::e($p->id) . '/edit';
 		$help   = FieldHints::load();
@@ -130,7 +130,14 @@ final class PresetForm
 		}
 
 		foreach ($groups as $label => $names) {
-			$out .= '<details><summary>' . Html::e($label) . '</summary>';
+			$suffix = '';
+			if ($label === 'Context & memory') {
+				// Running worst-case RAM for this preset (weights + full-ctx KV
+				// + overhead); app.js refreshes it as the form changes.
+				$suffix = ' — <span id="mem-estimate" data-url="/api/preset-estimate">'
+					. ($estimateBytes !== null ? Html::e(Format::gb($estimateBytes)) . ' GB' : '?') . '</span> estimated';
+			}
+			$out .= '<details><summary>' . Html::e($label) . $suffix . '</summary>';
 			foreach ($names as $name) {
 				$value = $p->args->{$name};
 				$override = '';

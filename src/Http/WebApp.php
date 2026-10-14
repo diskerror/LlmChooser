@@ -75,6 +75,7 @@ final class WebApp
 		$rt->add('POST', '/engines/{id}/delete', fn(Request $r, array $p): Response => $this->engineDelete($p['id']));
 		$rt->add('GET', '/health', fn(Request $r): Response => Response::json(['status' => 'ok']));
 		$rt->add('GET', '/api/status', fn(Request $r): Response => $this->apiStatus());
+		$rt->add('POST', '/api/preset-estimate', fn(Request $r): Response => $this->apiPresetEstimate($r));
 		$rt->add('GET', '/api/dashboard-panels', fn(Request $r): Response => $this->apiDashboardPanels());
 		$rt->add('GET', '/assets/style.css', fn(Request $r): Response => $this->css());
 		$rt->add('GET', '/assets/app.js', fn(Request $r): Response => $this->js());
@@ -101,9 +102,9 @@ final class WebApp
 		$body = $this->memorySection($instances)
 			. '<section><h2>Loaded</h2>' . $this->loadedTable($loaded) . '</section>'
 			. '<section><h2>Available</h2>'
-			. '<table><tr><th>Preset</th><th>Model</th><th>Ctx</th><th>Est. memory</th><th>Fits?</th><th>Actions</th></tr>'
+			. '<table><tr><th>Preset</th><th>Model</th><th class="num">Ctx</th><th class="num">Est. memory (GB)</th><th>Actions</th></tr>'
 			. '<tbody id="available-tbody">'
-			. ($available !== '' ? $available : '<tr><td colspan="6">Nothing available to start.</td></tr>')
+			. ($available !== '' ? $available : '<tr><td colspan="5">Nothing available to start.</td></tr>')
 			. '</tbody></table></section>'
 			. $this->orphanSection()
 			. $this->brokenBanner();
@@ -114,8 +115,8 @@ final class WebApp
 	/** @param iterable<string,Instance> $instances @param iterable<string,Preset> $presets */
 	private function loadedTable(string $rows): string
 	{
-		return '<table><tr><th>Preset</th><th>Model</th><th>Status</th><th>Port</th><th>Ctx</th>'
-			. '<th>Memory (est.)</th><th>Uptime</th><th>Last used</th><th>Actions</th></tr>'
+		return '<table><tr><th>Preset</th><th>Model</th><th>Status</th><th class="num">Port</th><th class="num">Ctx</th>'
+			. '<th class="num">Memory (est. GB)</th><th>Uptime</th><th>Last used</th><th>Actions</th></tr>'
 			. '<tbody id="loaded-tbody">'
 			. ($rows !== '' ? $rows : '<tr><td colspan="9">Nothing loaded.</td></tr>')
 			. '</tbody></table>';
@@ -238,7 +239,7 @@ final class WebApp
 			}
 		}
 
-		return Response::html(Html::page('New preset', PresetForm::render($preset, $models, true, [], false, $this->app->engines->loadAll()), $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all())));
+		return Response::html(Html::page('New preset', PresetForm::render($preset, $models, true, [], false, $this->app->engines->loadAll(), $this->presetEstimateBytes($preset)), $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all())));
 	}
 
 	/**
@@ -282,7 +283,7 @@ final class WebApp
 		$errors = PresetValidator::validate($preset, $this->app->engines, true, $this->app->presets);
 		if ($errors !== []) {
 			return Response::html(
-				Html::page('New preset', PresetForm::render($preset, $this->app->modelScanner()->scan(), true, $errors, false, $this->app->engines->loadAll()), '', '', $r->path, $this->headerSummary($this->app->state->all())),
+				Html::page('New preset', PresetForm::render($preset, $this->app->modelScanner()->scan(), true, $errors, false, $this->app->engines->loadAll(), $this->presetEstimateBytes($preset)), '', '', $r->path, $this->headerSummary($this->app->state->all())),
 				422
 			);
 		}
@@ -299,7 +300,7 @@ final class WebApp
 		}
 		$running = $this->instanceIsLive($id);
 		return Response::html(
-			Html::page('Edit ' . $id, PresetForm::render($preset, $this->app->modelScanner()->scan(), false, [], $running, $this->app->engines->loadAll()), $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all()))
+			Html::page('Edit ' . $id, PresetForm::render($preset, $this->app->modelScanner()->scan(), false, [], $running, $this->app->engines->loadAll(), $this->presetEstimateBytes($preset)), $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all()))
 		);
 	}
 
@@ -323,7 +324,7 @@ final class WebApp
 		$errors = PresetValidator::validate($preset, $this->app->engines, false, $this->app->presets);
 		if ($errors !== []) {
 			return Response::html(
-				Html::page('Edit ' . $id, PresetForm::render($preset, $this->app->modelScanner()->scan(), false, $errors, $this->instanceIsLive($id), $this->app->engines->loadAll()), '', '', $r->path, $this->headerSummary($this->app->state->all())),
+				Html::page('Edit ' . $id, PresetForm::render($preset, $this->app->modelScanner()->scan(), false, $errors, $this->instanceIsLive($id), $this->app->engines->loadAll(), $this->presetEstimateBytes($preset)), '', '', $r->path, $this->headerSummary($this->app->state->all())),
 				422
 			);
 		}
@@ -389,16 +390,16 @@ final class WebApp
 		}
 		$rows = '';
 		foreach ($orphans as $o) {
-			$rows .= '<tr><td>' . Html::e((string)$o['pid']) . '</td>'
+			$rows .= '<tr><td class="num">' . Html::e((string)$o['pid']) . '</td>'
 				. '<td>' . Html::e($o['port']) . '</td>'
 				. '<td>' . Html::e($o['model']) . '</td>'
-				. '<td>' . Html::e(Format::humanBytes($o['rss'])) . '</td>'
+				. '<td class="num">' . Html::e(Format::gb((int)$o['rss'])) . '</td>'
 				. '<td>' . Html::postButton('/orphans/kill?pid=' . $o['pid'], 'Kill') . '</td></tr>';
 		}
 		return '<section><h2>Untracked servers</h2>'
 			. '<p>These llama-server processes are running but LlmChooser has lost track of them. '
 			. 'They still hold memory (RSS here excludes GPU-held model memory).</p>'
-			. '<table><tr><th>PID</th><th>Port</th><th>Model</th><th>RSS</th><th>Actions</th></tr>' . $rows . '</table>'
+			. '<table><tr><th class="num">PID</th><th>Port</th><th>Model</th><th class="num">RSS (GB)</th><th>Actions</th></tr>' . $rows . '</table>'
 			. Html::postButton('/orphans/kill', 'Kill all untracked', 'danger', 'Kill all untracked llama-server processes?')
 			. '</section>';
 	}
@@ -844,6 +845,29 @@ final class WebApp
 	 * never drift. Deliberately not raw JSON + client templating — this
 	 * app renders all markup in PHP.
 	 */
+	/** Worst-case RAM for a preset as currently posted by the form (not saved). */
+	private function presetEstimateBytes(Preset $p): ?int
+	{
+		if ($p->model_path === '') {
+			return null;
+		}
+		try {
+			return $this->app->memory->estimate($p)->totalBytes();
+		} catch (Throwable) {
+			return null;
+		}
+	}
+
+	private function apiPresetEstimate(Request $r): Response
+	{
+		try {
+			$bytes = $this->presetEstimateBytes(new Preset(PresetForm::fromPost($r->post)));
+		} catch (Throwable) {
+			$bytes = null;
+		}
+		return Response::json(['gb' => $bytes === null ? null : Format::gb($bytes)]);
+	}
+
 	private function apiDashboardPanels(): Response
 	{
 		$instances = $this->app->processes->refresh();
@@ -851,6 +875,7 @@ final class WebApp
 		return Response::json([
 			'loaded_html'   => $this->loadedRows($instances, $presets),
 			'available_html' => $this->availableRows($instances, $presets),
+			'memory_html'   => $this->memoryInner($instances),
 		]);
 	}
 
@@ -978,12 +1003,12 @@ final class WebApp
 			$rows .= '<tr><td><a href="/presets/' . Html::e($pid) . '/edit">' . Html::e($pid) . '</a></td>'
 				. '<td>' . Html::e($model) . '</td>'
 				. '<td>' . $this->statusCell($i) . '</td>'
-				. '<td>' . Html::e((string)($i->port ?: '-')) . '</td>'
-				. '<td>' . $this->ctxCell($p) . '</td>'
-				. '<td>' . ($alloc !== null ? Html::e(Format::humanBytes($alloc->totalBytes())) : '-') . '</td>'
+				. '<td class="num">' . Html::e((string)($i->port ?: '-')) . '</td>'
+				. '<td class="num">' . $this->ctxCell($p) . '</td>'
+				. '<td class="num">' . ($alloc !== null ? Html::e(Format::gb($alloc->totalBytes())) : '-') . '</td>'
 				. '<td>' . ($i->started_at > 0 ? Html::e(Format::duration(time() - $i->started_at)) : '-') . '</td>'
 				. '<td>' . ($i->last_used > 0 ? Html::e(Format::duration(time() - $i->last_used)) . ' ago' : '-') . '</td>'
-				. '<td>' . $acts . '</td></tr>';
+				. '<td class="actions">' . $acts . '</td></tr>';
 			if ($i->message !== '') {
 				$rows .= '<tr class="messagerow"><td colspan="9">' . Html::e($i->message) . '</td></tr>';
 			}
@@ -993,68 +1018,42 @@ final class WebApp
 
 	/**
 	 * Available panel rows: enabled presets that are not running
-	 * (GUI-DESIGN.md §3 — disabled presets never appear here). "Fits?"
-	 * reuses the Phase 3 admission check against current free memory.
+	 * (GUI-DESIGN.md §3 — disabled presets never appear here).
 	 *
 	 * @param iterable<string,Instance> $instances
 	 * @param iterable<string,Preset> $presets
 	 */
 	private function availableRows(iterable $instances, iterable $presets): string
 	{
-		$running = [];
-		foreach ($instances as $i) {
-			if (in_array($i->status, [Instance::LOADING, Instance::READY], true) && $i->allocation !== []) {
-				$running[] = Allocation::fromArray($i->allocation);
-			}
-		}
-
 		$rows = '';
 		foreach ($presets as $pid => $p) {
 			if (!$p->enabled || isset($instances[$pid])) {
 				continue;
 			}
-			[$estCell, $fitsCell] = $this->fitCells($p, $running);
+			$estCell = $this->estimateCell($p);
 			$acts = Html::postButton("/presets/{$pid}/start", 'Start')
 				. '<a class="btn" href="/presets/' . Html::e($pid) . '/edit">Edit</a> '
 				. '<a class="btn" href="/presets/new?copy=' . Html::e(rawurlencode((string)$pid)) . '">Duplicate</a>';
 			$rows .= '<tr><td><a href="/presets/' . Html::e($pid) . '/edit">' . Html::e($pid) . '</a></td>'
 				. '<td>' . Html::e($p->model_path !== '' ? basename($p->model_path) : '-') . '</td>'
-				. '<td>' . $this->ctxCell($p) . '</td>'
-				. '<td>' . $estCell . '</td>'
-				. '<td>' . $fitsCell . '</td>'
+				. '<td class="num">' . $this->ctxCell($p) . '</td>'
+				. '<td class="num">' . $estCell . '</td>'
 				. '<td>' . $acts . '</td></tr>';
 		}
 		return $rows;
 	}
 
-	/**
-	 * Estimate + "Fits?" cells for one not-running preset. "?" whenever
-	 * memory cannot be read — macOS has no probe, and a preset with no
-	 * model file cannot be estimated (GUI-DESIGN.md §3).
-	 *
-	 * @param list<Allocation> $running
-	 * @return array{0:string,1:string}
-	 */
-	private function fitCells(Preset $p, array $running): array
+	/** Estimated GB for a not-running preset; "?" when it cannot be estimated. */
+	private function estimateCell(Preset $p): string
 	{
 		if ($p->model_path === '') {
-			return ['-', '?'];
+			return '-';
 		}
 		try {
-			$result = $this->app->memory->admit($p, $running);
+			return Html::e(Format::gb($this->app->memory->estimate($p)->totalBytes()));
 		} catch (Throwable) {
-			return ['?', '?'];
+			return '?';
 		}
-		$est = Format::humanBytes($this->app->memory->estimate($p)->totalBytes());
-		if ($result->fits) {
-			return [$est, '✓ fits'];
-		}
-		// Biggest per-device gap is what actually blocks the start.
-		$worst = 0;
-		foreach ($result->perBudget as $r) {
-			$worst = max($worst, $r['need'] - $r['available']);
-		}
-		return [$est, '<span class="fit-no">✗</span> needs ' . Format::humanBytes($worst) . ' more'];
 	}
 
 	/** Text badge per GUI-DESIGN.md §3: wording differs per status, CSS carries fill/outline. */
@@ -1129,24 +1128,29 @@ final class WebApp
 	 */
 	private function memorySection(iterable $instances): string
 	{
+		return '<section id="memory-section"><h2>Memory</h2>' . $this->memoryInner($instances) . '</section>';
+	}
+
+	/**
+	 * Memory panel body. Every figure is GB (powers of two), one decimal,
+	 * no units. "Total" is the pool LlmChooser's engines can use — on a
+	 * unified box that is min(MemTotal, GTT limit), see LinuxTopologyProbe —
+	 * "Available" is what is still allocatable right now (other programs
+	 * included) and "In use" is Total - Available.
+	 *
+	 * @param iterable<string,Instance> $instances
+	 */
+	private function memoryInner(iterable $instances): string
+	{
 		try {
-			$topo  = $this->app->memory->topology();
-			// Unified boxes: system RAM held by the GPU driver (amdgpu GTT)
-			// is a large slice of "used" that no process RSS accounts for —
-			// show it so the numbers explain themselves.
-			$heldTotal = 0;
-			foreach ($topo->devices as $d) {
-				$heldTotal += $d->driverHeldBytes;
-			}
-			$mem = '<table><tr><th>Device</th><th>Total</th><th>Available</th>'
-				. ($heldTotal > 0 ? '<th>GPU-held (GTT)</th>' : '')
-				. '<th>Est. in use by LlmChooser</th><th></th></tr>';
+			$topo = $this->app->memory->topology();
+			$mem  = '<table><tr><th>Device</th><th class="num">Total (GB)</th><th class="num">In use (GB)</th><th class="num">Available (GB)</th><th></th></tr>';
 			foreach ($topo->devices as $d) {
 				if ($topo->budgetId($d->id) !== $d->id) {
 					continue; // unified GPUs fold into their budget device
 				}
-				$segs  = '';
-				$inUse = 0;
+				$segs = '';
+				$est  = 0;
 				foreach ($instances as $i) {
 					if ($i->allocation === [] || $i->status === Instance::STOPPED) {
 						continue;
@@ -1160,38 +1164,27 @@ final class WebApp
 					if ($bytes <= 0) {
 						continue;
 					}
-					$inUse += $bytes;
+					$est  += $bytes;
 					$pct   = min(100, $d->totalBytes > 0 ? round($bytes / $d->totalBytes * 100, 2) : 0);
 					$segs .= '<div class="segment' . ($i->status === Instance::LOADING ? ' loading' : '')
 						. '" style="width:' . $pct . '%" title="'
-						. Html::e($i->preset_id . ': ' . Format::humanBytes($bytes)) . '">'
+						. Html::e($i->preset_id . ': ' . Format::gb($bytes) . ' GB (est.)') . '">'
 						. Html::e($i->preset_id) . '</div>';
 				}
-				// Free space: unlabelled remainder segment.
-				$freePct = $d->totalBytes > 0 ? max(0, round(($d->totalBytes - $inUse) / $d->totalBytes * 100, 2)) : 0;
-				// GPU-held (GTT) segment, drawn before the instance segments
-				// (it is pre-existing occupancy on unified boxes).
-				$heldSeg = '';
-				if ($d->driverHeldBytes > 0 && $d->totalBytes > 0) {
-					$heldSeg = '<div class="segment gtheld" style="width:'
-						. min(100, round($d->driverHeldBytes / $d->totalBytes * 100, 2))
-						. '%" title="held by GPU driver (amdgpu GTT)"></div>';
-				}
-				$mem .= '<tr><td>' . Html::e($d->id) . '</td>'
-					. '<td>' . Html::e(Format::humanBytes($d->totalBytes)) . '</td>'
-					. '<td>' . Html::e(Format::humanBytes($d->availableBytes)) . '</td>'
-					. ($heldTotal > 0 ? '<td>' . Html::e($d->driverHeldBytes > 0 ? Format::humanBytes($d->driverHeldBytes) : '-') . '</td>' : '')
-					. '<td>' . Html::e(Format::humanBytes($inUse)) . '</td>'
-					. '<td><div class="membar">' . $heldSeg . $segs
+				$used     = max(0, $d->totalBytes - $d->availableBytes);
+				$otherPct = $d->totalBytes > 0 ? max(0, round(($used - min($used, $est)) / $d->totalBytes * 100, 2)) : 0;
+				$freePct  = $d->totalBytes > 0 ? max(0, round($d->availableBytes / $d->totalBytes * 100, 2)) : 0;
+				$mem .= '<tr><td>' . Html::e($topo->label($d->id)) . '</td>'
+					. '<td class="num">' . Format::gb($d->totalBytes) . '</td>'
+					. '<td class="num">' . Format::gb($used) . '</td>'
+					. '<td class="num">' . Format::gb($d->availableBytes) . '</td>'
+					. '<td><div class="membar">' . $segs
+					. '<div class="segment gtheld" style="width:' . $otherPct . '%" title="other / not attributed to a running preset"></div>'
 					. '<div class="segment free" style="width:' . $freePct . '%"></div></div></td></tr>';
 			}
-			$mem .= '</table>';
-			if ($topo->isUnified()) {
-				$mem .= '<p>unified memory</p>';
-			}
-			return '<section><h2>Memory</h2>' . $mem . '</section>';
+			return $mem . '</table>';
 		} catch (Throwable $e) {
-			return '<section><h2>Memory</h2><p class="flash">Memory info unavailable: ' . Html::e($e->getMessage()) . '</p></section>';
+			return '<p class="flash">Memory info unavailable: ' . Html::e($e->getMessage()) . '</p>';
 		}
 	}
 
@@ -1218,10 +1211,7 @@ final class WebApp
 					continue;
 				}
 				$used = max(0, $d->totalBytes - $d->availableBytes);
-				$parts[] = 'RAM ' . Format::humanBytes($used) . '/' . Format::humanBytes($d->totalBytes);
-				if ($d->driverHeldBytes > 0) {
-					$parts[] = 'GPU-held ' . Format::humanBytes($d->driverHeldBytes);
-				}
+				$parts[] = 'RAM ' . Format::gb($used) . '/' . Format::gb($d->totalBytes) . ' GB';
 			}
 		} catch (Throwable) {
 			// probe failure: summary keeps host + count only

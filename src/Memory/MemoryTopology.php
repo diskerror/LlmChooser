@@ -39,6 +39,19 @@ final class MemoryTopology
 		return array_values($ids);
 	}
 
+	/** Display name: the budget device of a unified-memory box is an "APU". */
+	public function label(string $id): string
+	{
+		if ($id === 'cpu') {
+			foreach ($this->gpuIds() as $g) {
+				if ($this->devices[$g]->unifiedWith === 'cpu') {
+					return 'apu';
+				}
+			}
+		}
+		return $id;
+	}
+
 	public function isUnified(): bool
 	{
 		foreach ($this->gpuIds() as $id) {

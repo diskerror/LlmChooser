@@ -52,7 +52,7 @@ class LinuxTopologyProbeTest extends TestCase
         ]));
     }
 
-    private function amdCard(string $card, int $total, int $used, ?int $gttUsed = null): void
+    private function amdCard(string $card, int $total, int $used, ?int $gttUsed = null, ?int $gttTotal = null): void
     {
         $dir = $this->root . '/sys/class/drm/' . $card . '/device';
         mkdir($dir, 0775, true);
@@ -60,6 +60,9 @@ class LinuxTopologyProbeTest extends TestCase
         file_put_contents($dir . '/mem_info_vram_used', (string)$used);
         if ($gttUsed !== null) {
             file_put_contents($dir . '/mem_info_gtt_used', (string)$gttUsed);
+        }
+        if ($gttTotal !== null) {
+            file_put_contents($dir . '/mem_info_gtt_total', (string)$gttTotal);
         }
     }
 
@@ -144,6 +147,30 @@ class LinuxTopologyProbeTest extends TestCase
         // round-trip through the array form
         $back = MemoryTopology::fromArray($topo->toArray());
         $this->assertSame(96 * 1024 ** 3, $back->devices['cpu']->driverHeldBytes);
+    }
+
+    public function test_unified_pool_is_capped_at_gtt_total(): void
+    {
+        $this->meminfo(); // MemTotal ~124.95 GiB, MemAvailable ~28.96 GiB
+        $this->amdCard('card0', 536870912, 0, 92 * 1024 ** 3, 124 * 1024 ** 3);
+
+        $topo = $this->probe(static fn(array $argv): ?string => null)->detect();
+        $cpu  = $topo->devices['cpu'];
+
+        $this->assertSame(124 * 1024 ** 3, $cpu->totalBytes);
+        // headroom (32 GiB) exceeds MemAvailable (~29 GiB): the smaller wins
+        $this->assertSame(30361004 * 1024, $cpu->availableBytes);
+        $this->assertSame('apu', $topo->label('cpu'));
+    }
+
+    public function test_gtt_headroom_can_be_the_limit(): void
+    {
+        $this->meminfo();
+        $this->amdCard('card0', 536870912, 0, 100 * 1024 ** 3, 124 * 1024 ** 3);
+
+        $cpu = $this->probe(static fn(array $argv): ?string => null)->detect()->devices['cpu'];
+
+        $this->assertSame(24 * 1024 ** 3, $cpu->availableBytes);
     }
 
     public function test_gtt_absent_is_zero(): void

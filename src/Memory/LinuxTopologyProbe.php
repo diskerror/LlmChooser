@@ -46,14 +46,32 @@ final class LinuxTopologyProbe implements TopologyProbe
 		// The kernel already counts them as used, so this only explains the
 		// gap between "used" and the sum of process RSS; never re-add it.
 		$held = 0;
+		$gttTotal = 0;
 		foreach (glob($this->sysRoot . '/class/drm/card*/device/mem_info_gtt_used') ?: [] as $file) {
 			if (preg_match('/^card\d+-/', basename(dirname($file, 2)))) {
 				continue; // connector entries, would double-count
 			}
 			$held += max(0, (int)@file_get_contents($file));
+			$gttTotal += max(0, (int)@file_get_contents(dirname($file) . '/mem_info_gtt_total'));
 		}
 		if ($held > 0) {
 			$cpu = new Device($cpu->id, $cpu->kind, $cpu->totalBytes, $cpu->availableBytes, $cpu->unifiedWith, $held);
+		}
+
+		// Unified (APU) boxes: the GPU can only address system RAM up to the
+		// GTT limit, which is set below MemTotal. The inference pool is
+		// therefore min(MemTotal, GTT total), and what is still allocatable
+		// is the lesser of the kernel's MemAvailable and the GTT headroom.
+		// (MemAvailable already excludes GTT pages, so nothing is re-added.)
+		$unified = false;
+		foreach ($gpus as $g) {
+			$unified = $unified || $g->unifiedWith === 'cpu';
+		}
+		if ($unified && $gttTotal > 0) {
+			$cpu = new Device(
+				$cpu->id, $cpu->kind, min($cpu->totalBytes, $gttTotal),
+				min($cpu->availableBytes, max(0, $gttTotal - $held)), $cpu->unifiedWith, $cpu->driverHeldBytes,
+			);
 		}
 
 		return new MemoryTopology([$cpu, ...$gpus]);

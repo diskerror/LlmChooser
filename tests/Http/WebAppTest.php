@@ -424,17 +424,30 @@ class WebAppTest extends TestCase
 		$this->assertStringContainsString('/presets/p2/edit', $available);
 	}
 
-	public function testAvailableShowsFitsCheck(): void
+	public function testAvailableHasNoFitsColumnAndShowsBareGb(): void
 	{
-		// Generous topology (100 GB) → fits; rebuild with 0.5 GB → must not.
 		$available = $this->section($this->get('/')->body, 'Available');
-		$this->assertStringContainsString('✓ fits', $available);
+		$this->assertStringNotContainsString('Fits?', $available);
+		$this->assertStringNotContainsString('fits', $available);
+		$this->assertStringContainsString('<td class="num">2.0</td>', $available); // GB, one decimal, no unit
+	}
 
-		$this->app = $this->makeApp(0.5);
-		$this->web = new WebApp($this->app);
-		$available = $this->section($this->get('/')->body, 'Available');
-		$this->assertStringContainsString('fit-no">✗</span> needs', $available);
-		$this->assertStringContainsString('more', $available);
+	public function testPresetFormShowsLiveMemoryEstimate(): void
+	{
+		$this->assertMatchesRegularExpression('#Context &amp; memory[^<]*— <span id="mem-estimate"[^>]*>[\d.]+ GB</span> estimated#u', $this->get('/presets/p1/edit')->body);
+
+		$res  = $this->post('/api/preset-estimate', ['model_path' => $this->dir . '/models/m.gguf', 'args' => ['ctx_size' => '512']]);
+		$data = json_decode($res->body, true);
+		$this->assertMatchesRegularExpression('/^\d+\.\d$/', $data['gb']);
+		$this->assertNull(json_decode($this->post('/api/preset-estimate', [])->body, true)['gb']);
+	}
+
+	public function testMemoryPanelColumnsAndLiveFragment(): void
+	{
+		$body = $this->get('/')->body;
+		$this->assertStringContainsString('<th class="num">Total (GB)</th><th class="num">In use (GB)</th><th class="num">Available (GB)</th>', $body);
+		$this->assertStringNotContainsString('GPU-held', $body);
+		$this->assertArrayHasKey('memory_html', json_decode($this->get('/api/dashboard-panels')->body, true));
 	}
 
 	public function testMemoryBarRendersOneSegmentPerRunningInstance(): void
@@ -513,7 +526,7 @@ class WebAppTest extends TestCase
 		$this->assertStringContainsString('<span class="summary">', $body);
 		$this->assertStringContainsString('1 running', $body);
 		$this->assertStringContainsString('RAM ', $body);
-		$this->assertStringContainsString('/100.0 GiB', $body); // 100 GiB in Format::humanBytes style
+		$this->assertStringContainsString('/100.0 GB', $body);
 
 		// summary appears on other pages too
 		$this->assertStringContainsString('1 running', $this->get('/presets')->body);

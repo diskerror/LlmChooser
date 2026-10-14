@@ -11,6 +11,12 @@ final class Format
 	 * bytes. (Not decimal GB — the box's RAM numbers must be comparable
 	 * with free/htop.)
 	 */
+	/** Bare GiB value (powers of two), one decimal, no unit — for table cells. */
+	public static function gb(?int $bytes): string
+	{
+		return $bytes === null ? '-' : sprintf('%.1f', $bytes / 1024 ** 3);
+	}
+
 	public static function humanBytes(?int $bytes): string
 	{
 		if ($bytes === null) {

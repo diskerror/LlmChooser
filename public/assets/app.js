@@ -52,6 +52,7 @@ document.querySelectorAll('form.disable-form[data-running="1"]').forEach(form =>
 // partial and rewrite the two panel bodies in place. Row markup stays in
 // PHP (one renderer for first paint and every refresh); meta-refresh in
 // the page head remains the no-JS fallback.
+const memorySection = document.getElementById('memory-section');
 const loadedBody = document.getElementById('loaded-tbody');
 const availableBody = document.getElementById('available-tbody');
 if (loadedBody && availableBody) {
@@ -67,6 +68,10 @@ if (loadedBody && availableBody) {
           bindTestForms(loadedBody);
         }
         if (data.available_html) availableBody.innerHTML = data.available_html;
+        if (data.memory_html && memorySection) {
+          memorySection.querySelector('h2').nextElementSibling?.remove();
+          memorySection.insertAdjacentHTML('beforeend', data.memory_html);
+        }
       }
     } catch (e) { /* network hiccup: leave the stale table; meta-refresh covers it */ }
   }, 3000);
@@ -162,3 +167,26 @@ if (modelsTable) {
     });
   });
 }
+
+// Preset form: live worst-case RAM figure in the "Context & memory" header.
+// The server estimates from the posted (unsaved) form; no JS = the figure
+// rendered at page load stays.
+(() => {
+  const span = document.getElementById('mem-estimate');
+  const form = span && span.closest('form');
+  if (!form) return;
+  let timer = null, seq = 0;
+  const refresh = () => {
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      const mine = ++seq;
+      try {
+        const res = await fetch(span.dataset.url, { method: 'POST', body: new URLSearchParams(new FormData(form)) });
+        const data = await res.json();
+        if (mine === seq) span.textContent = data.gb === null ? '?' : data.gb + ' GB';
+      } catch (e) { /* keep the last figure */ }
+    }, 300);
+  };
+  form.addEventListener('input', refresh);
+  form.addEventListener('change', refresh);
+})();

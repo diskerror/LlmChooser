@@ -219,7 +219,9 @@ table.kv td { vertical-align: top; }
 table.kv code { word-break: break-all; }
 
 /* GPU-held (amdgpu GTT) segment in the memory bar (unified boxes) */
-.membar .segment.gtheld { background: #6a6a6a; }
+.membar .segment.gtheld { background: #6a6a6a; } /* other / unattributed use */
+td.actions { white-space: nowrap; }
+td.actions .test-result { display: block; white-space: normal; font-size: .85em; color: var(--muted); }
 
 /* Models tab (Phase 12 tweak): three-line name cell */
 .model-name { font-weight: 600; }
@@ -242,3 +244,6 @@ dialog.engine-picker-dialog::backdrop { background: rgba(0, 0, 0, .35); }
 	padding: .4rem .6rem;
 	cursor: pointer;
 }
+
+/* numeric columns: fixed one-decimal values, so right-aligned = decimal-aligned */
+th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
