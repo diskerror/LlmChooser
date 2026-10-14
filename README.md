@@ -31,6 +31,11 @@ and see what it costs in memory before you load it.
 - Manages `llama-server`: start, stop and restart presets, with a dashboard
   showing what is loaded, what is available and how much memory is in use.
 - A choice of help detail: short hints by default, full help on request.
+- Two layers of help for every setting: llama.cpp's own description, read from
+  your `llama-server` binary (so it always matches the build you run), then
+  our notes beneath it. Reload it from the engine form; `llmchooser help-review`
+  lists settings whose llama.cpp wording has changed since our notes were last
+  checked. llama.cpp's text is used under its MIT license (see `NOTICE.md`).
 - A live estimate of the memory a preset needs, updated as you edit its
   settings.
 - A web-based GUI.
