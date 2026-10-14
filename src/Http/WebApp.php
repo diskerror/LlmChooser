@@ -933,7 +933,6 @@ final class WebApp
 		$ok   = curl_exec($ch);
 		$code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
 		$err  = curl_error($ch);
-		curl_close($ch);
 		$end = microtime(true);
 
 		if ($ok === false) {

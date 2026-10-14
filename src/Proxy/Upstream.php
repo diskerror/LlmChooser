@@ -61,7 +61,6 @@ final class Upstream
 		}
 		$ok  = curl_exec($ch) !== false;
 		$err = $ok ? '' : curl_error($ch);
-		curl_close($ch);
 		return [$ok, $err];
 	}
 }
