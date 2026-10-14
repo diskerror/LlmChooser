@@ -78,7 +78,17 @@ composer install --no-dev --optimize-autoloader
 
 # Writable storage dir (presets, runtime state)
 sudo chown -R www-data:www-data storage/
+
+# A writable cache dir in the web user's home, for the GPU's shader cache
+# (see the note below). The home directory itself stays root-owned.
+sudo install -d -o www-data -g www-data "$(getent passwd www-data | cut -d: -f6)/.cache"
 ```
+
+> **Why the cache directory?** The inference engines LlmChooser starts run as
+> the web user (`www-data`). Vulkan (Mesa) keeps compiled shaders under
+> `$HOME/.cache`, and `www-data`'s home is `/var/www`, which is root-owned. Without
+> that directory every start logs `Failed to create /var/www/.cache for shader
+> cache (Permission denied)---disabling.` and runs without the shader cache.
 
 > `diskerror/typed` is pulled as a local path repo in `composer.json`
 > (`../Typed`). On a deploy box, either vendor a real version-pinned
