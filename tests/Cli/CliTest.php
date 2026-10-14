@@ -479,4 +479,36 @@ class CliTest extends TestCase
         $this->assertSame(1, $rc);
         $this->assertStringContainsString('Not executable', $err);
     }
+
+    // ---- help-review ----
+
+    private function reviewRun(string $fieldHelp, array $args): array
+    {
+        $cli = new Cli($this->app, new Output($this->o, $this->e), null, __DIR__ . '/../../docs/llama-server-help.txt', $fieldHelp);
+        $rc  = $cli->run($args);
+        return [$rc, $this->out(), $this->err()];
+    }
+
+    public function test_help_review_flags_changed_wording_and_stamp_clears_it(): void
+    {
+        @mkdir($this->dir . '/docs');
+        copy(__DIR__ . '/../../docs/llama-server-help.txt', $this->dir . '/docs/llama-server-help.txt');
+        $f = $this->dir . '/field_help.json';
+        $d = json_decode((string)file_get_contents(__DIR__ . '/../../resources/field_help.json'), true);
+        $d['ctx_size']['reviewed'] = 'stale0000000';
+        file_put_contents($f, json_encode($d));
+
+        [$rc, $out] = $this->reviewRun($f, ['help-review']);
+        $this->assertSame(1, $rc);
+        $this->assertStringContainsString('~ changed:  ctx_size', $out);
+        $this->assertStringNotContainsString('~ changed:  n_gpu_layers', $out);
+
+        [$rc, $out] = $this->reviewRun($f, ['help-review', '--stamp']);
+        $this->assertSame(0, $rc);
+        $this->assertStringContainsString('Stamped 1 field', $out);
+
+        [$rc, $out] = $this->reviewRun($f, ['help-review']);
+        $this->assertSame(0, $rc);
+        $this->assertStringContainsString('Nothing to review', $out);
+    }
 }

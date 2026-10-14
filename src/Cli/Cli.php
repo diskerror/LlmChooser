@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace LlmChooser\Cli;
 
 use LlmChooser\App;
+use LlmChooser\Engine\HelpParser;
+use LlmChooser\Http\FieldHints;
 use LlmChooser\Memory\Allocation;
 use LlmChooser\Process\AdmissionException;
 use LlmChooser\Process\HealthChecker;
@@ -32,6 +34,7 @@ final class Cli
 	  enable  <preset-id>                      allow this preset to be offered/started
 	  disable <preset-id>                      park this preset (stop first if running)
 	  help-drift   <llama-server>              diff --help against the captured copy
+	  help-review  [<engine-id>] [--stamp]     list fields whose llama.cpp text changed since our notes were reviewed
 	  set-startup    <preset-id>               start this preset at boot (systemd, needs root)
 	  remove-startup <preset-id>               undo set-startup (needs root)
 	TXT;
@@ -41,6 +44,7 @@ final class Cli
 		private readonly Output $out = new Output(),
 		private readonly ?StartupManager $startup = null,
 		private readonly string $capturedHelpPath = __DIR__ . '/../../docs/llama-server-help.txt',
+		private readonly string $fieldHelpPath = FieldHints::HELP_FILE,
 	) {}
 
 	/** @param list<string> $args  arguments AFTER the script name. Returns exit code. */
@@ -85,7 +89,7 @@ final class Cli
 	/** @param array<string,string|bool> $opts @param list<string> $pos */
 	private function dispatch(string $command, array $pos, array $opts): int
 	{
-		$known = ['force', 'wait', 'foreground', 'lines', 'enabled'];
+		$known = ['force', 'wait', 'foreground', 'lines', 'enabled', 'stamp'];
 		foreach (array_keys($opts) as $name) {
 			if (!in_array($name, $known, true)) {
 				throw new UsageException("Unknown option: --{$name}");
@@ -103,6 +107,7 @@ final class Cli
 			'enable'  => $this->setEnabled($this->needId($pos), true),
 			'disable' => $this->setEnabled($this->needId($pos), false),
 			'help-drift'   => $this->helpDrift($pos),
+			'help-review'  => $this->helpReview($pos, isset($opts['stamp'])),
 			'set-startup'    => $this->startupCmd('set', $pos),
 			'remove-startup' => $this->startupCmd('remove', $pos),
 			default => $this->unknown($command),
@@ -266,6 +271,73 @@ final class Cli
 		}
 		$this->out->line('Review resources/field_help.json for the flags above.');
 		return 1;
+	}
+
+	/**
+	 * Which of our notes need a human look? Compares the engine's llama.cpp
+	 * wording (its captured --help, else the bundled snapshot) with the hash
+	 * each field's notes were last reviewed against. --stamp records the
+	 * current wording as reviewed — run it only AFTER reading the changes.
+	 * Exit 1 when anything needs review.
+	 *
+	 * @param list<string> $pos
+	 */
+	private function helpReview(array $pos, bool $stamp): int
+	{
+		$src     = isset($pos[0]) ? $this->app->help->forEngine($pos[0]) : ['source' => 'bundled'] + $this->app->help->bundled();
+		$entries = $src['entries'];
+		$index   = HelpParser::aliasIndex($entries);
+		$fields  = json_decode((string)@file_get_contents($this->fieldHelpPath), true);
+		if (!is_array($fields)) {
+			$this->out->error("Cannot read {$this->fieldHelpPath}");
+			return 1;
+		}
+
+		$changed = $missing = $documented = [];
+		foreach ($fields as $name => $f) {
+			if (HelpParser::tokens((string)($f['flag'] ?? '')) === []) {
+				continue; // LlmChooser-only field
+			}
+			$m = HelpParser::match($entries, $index, (string)$f['flag']);
+			if ($m === null) {
+				$missing[] = $name;
+				continue;
+			}
+			foreach (HelpParser::tokens($m['flags']) as $t) {
+				$documented[$index[$t]] = true;
+			}
+			$now = HelpParser::hash($m['text']);
+			if (($f['reviewed'] ?? '') !== $now) {
+				$changed[$name] = $now;
+			}
+		}
+
+		$this->out->line('Source: ' . $src['source'] . ($src['version'] !== '' ? ' (' . $src['version'] . ')' : ''));
+		foreach ($changed as $name => $h) {
+			$this->out->line("~ changed:  {$name}  ({$fields[$name]['flag']})");
+		}
+		foreach ($missing as $name) {
+			$this->out->line("- missing:  {$name}  ({$fields[$name]['flag']}) is not in this engine's --help");
+		}
+		$undocumented = count($entries) - count($documented);
+		$this->out->line("{$undocumented} llama.cpp options have no field of their own (use extra flags).");
+
+		if ($changed === [] && $missing === []) {
+			$this->out->line('Nothing to review.');
+			return 0;
+		}
+		if ($stamp && $changed !== []) {
+			foreach ($changed as $name => $h) {
+				$fields[$name]['reviewed'] = $h;
+			}
+			$json = json_encode($fields, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
+			if (file_put_contents($this->fieldHelpPath, $json) === false) {
+				$this->out->error("Cannot write {$this->fieldHelpPath}");
+				return 1;
+			}
+			$this->out->line('Stamped ' . count($changed) . ' field(s) as reviewed.');
+		}
+		return $stamp && $missing === [] ? 0 : 1;
 	}
 
 	/**
