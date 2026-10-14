@@ -279,4 +279,51 @@ class MemoryEstimatorTest extends TestCase
             $this->est->kvBytesPer1k(GgufReader::read($h), 'f16')
         );
     }
+
+    /**
+     * Qwen3.8-Flash-Next numbers, checked against a real llama.cpp --verbose
+     * log: indexer cache 4608 MiB, recurrent state 540 + 21.09 MiB (1 seq +
+     * 4 MTP snapshots), MTP draft KV 512 MiB (f16, 1 layer).
+     */
+    public function test_compressed_attention_recurrent_and_mtp_draft(): void
+    {
+        $T = GgufReader::T_UINT32;
+        $main = $this->dir . '/qwen.gguf';
+        $mtp  = $this->dir . '/mtp.gguf';
+        $a    = 'qwen4exp';
+        $common = [
+            ['general.architecture', GgufReader::T_STRING, $a],
+            ["$a.context_length", $T, 262144], ["$a.embedding_length", $T, 2560],
+            ["$a.attention.head_count", $T, 24], ["$a.attention.head_count_kv", $T, 2],
+            ["$a.attention.key_length", $T, 256], ["$a.attention.value_length", $T, 256],
+            ["$a.full_attention_interval", $T, 4],
+        ];
+        $ratios = [];
+        for ($i = 0; $i < 48; $i++) {
+            $ratios[] = $i % 4 === 3 ? 4 : 0;
+        }
+        GgufFixture::write($main, array_merge($common, [
+            ["$a.block_count", $T, 48],
+            ["$a.attention.indexer.key_length", $T, 128],
+            ["$a.attention.compress_ratios", GgufReader::T_ARRAY, [GgufReader::T_INT32, $ratios]],
+            ["$a.ssm.inner_size", $T, 6144], ["$a.ssm.state_size", $T, 128],
+            ["$a.ssm.group_count", $T, 16], ["$a.ssm.conv_kernel", $T, 4],
+        ]), 0, 1000);
+        GgufFixture::write($mtp, array_merge($common, [
+            ["$a.block_count", $T, 49], ["$a.nextn_predict_layers", $T, 1],
+        ]), 0, 1000);
+
+        $p = new Preset([
+            'id' => 'q', 'model_path' => $main, 'model_draft_path' => $mtp,
+            'args' => ['ctx_size' => 262144, 'cache_type_k' => 'f32', 'cache_type_v' => 'f32',
+                'spec_type' => 'draft-mtp', 'spec_draft_n_max' => 4],
+        ]);
+        $b = $this->est->estimate($p, GgufReader::read($main), $this->unified())->breakdown;
+
+        $mib = 1024 ** 2;
+        $this->assertSame(12288 * $mib, $b['kv_cache']);
+        $this->assertSame(4608 * $mib, $b['kv_indexer']);
+        $this->assertEqualsWithDelta((540 + 21.09) * $mib, $b['recurrent'], 0.01 * $mib);
+        $this->assertSame(512 * $mib, $b['draft_kv']);
+    }
 }

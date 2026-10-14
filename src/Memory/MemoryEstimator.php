@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace LlmChooser\Memory;
 
 use LlmChooser\Model\GgufInfo;
+use LlmChooser\Model\GgufReader;
 use LlmChooser\Model\ModelFiles;
 use LlmChooser\Preset\Preset;
 
@@ -35,6 +36,17 @@ final class MemoryEstimator
 
 	/** Fixed compute/scratch overhead per instance (deliberately cautious). */
 	public const OVERHEAD_FIXED_BYTES = 1024 ** 3;
+
+	/**
+	 * Empirical compute/scratch buffer per ubatch token, from ONE llama.cpp
+	 * --verbose log (Qwen3.8-Flash-Next, 512-expert MoE, ubatch 512):
+	 * Vulkan 3345 + host 402 MiB for the main context, 361 MiB for the MTP
+	 * draft context. The graph allocator's size is not derivable from GGUF
+	 * metadata, so these are calibration constants — refine them when more
+	 * logs are available. Dense models keep the older, smaller formula.
+	 */
+	public const MOE_COMPUTE_BYTES_PER_UBATCH_TOKEN   = 7_677_000;
+	public const DRAFT_COMPUTE_BYTES_PER_UBATCH_TOKEN = 740_000;
 
 	public function estimate(Preset $preset, GgufInfo $info, MemoryTopology $topology): Allocation
 	{
@@ -78,32 +90,83 @@ final class MemoryEstimator
 		$draft   = $preset->model_draft_path !== null ? ModelFiles::totalBytes($preset->model_draft_path) : 0;
 
 		$blocks = $info->blockCount();
-		if ($blocks <= 0) {
-			$kv = 0;
-		} else {
+		$ctx    = $preset->args->ctx_size > 0 ? $preset->args->ctx_size : $info->contextLength();
+		$bk     = self::KV_BYTES[strtolower($preset->args->cache_type_k)] ?? 2.0;
+		$bv     = self::KV_BYTES[strtolower($preset->args->cache_type_v)] ?? 2.0;
+		$kv = $indexer = $recurrent = 0;
+		$kvLayers = 0;
+		if ($blocks > 0) {
 			// Hybrid attention: only every interval-th layer keeps KV.
 			$interval = (int)$info->archGet('full_attention_interval', 0);
 			$kvLayers = $interval > 1 ? intdiv($blocks, $interval) : $blocks;
 
-			$ctx = $preset->args->ctx_size > 0 ? $preset->args->ctx_size : $info->contextLength();
-
 			$kDim = $info->headCountKv() * $info->keyLength();
 			$vDim = $info->headCountKv() * $info->valueLength();
-			$bk   = self::KV_BYTES[strtolower($preset->args->cache_type_k)] ?? 2.0;
-			$bv   = self::KV_BYTES[strtolower($preset->args->cache_type_v)] ?? 2.0;
 
 			// NOT multiplied by parallel: slots share the total context.
 			$kv = (int)ceil($kvLayers * $ctx * ($kDim * $bk + $vDim * $bv));
+
+			// Compressed-attention models (compress_ratios) keep a second,
+			// per-ctx cache on the compressed layers: indexer-K plus V, one
+			// head each. Verified exact against llama.cpp's log (4608 MiB).
+			$ratios   = $info->archGet('attention.compress_ratios');
+			$idxKey   = (int)$info->archGet('attention.indexer.key_length', 0);
+			if (is_array($ratios) && $idxKey > 0) {
+				$compressed = count(array_filter($ratios, static fn($r): bool => (int)$r > 0));
+				$indexer    = (int)ceil($compressed * $ctx * ($idxKey * $bk + $info->valueLength() * $bv));
+			}
+
+			// Recurrent (SSM) layers: fp32 conv + state per sequence, plus
+			// n_rs_seq extra snapshots for MTP speculation (= draft max).
+			$inner = (int)$info->archGet('ssm.inner_size', 0);
+			$state = (int)$info->archGet('ssm.state_size', 0);
+			if ($inner > 0 && $state > 0) {
+				$groups  = (int)$info->archGet('ssm.group_count', 0);
+				$kernel  = (int)$info->archGet('ssm.conv_kernel', 4);
+				$perSeq  = 4 * ($inner * $state + max(0, $kernel - 1) * ($inner + 2 * $groups * $state));
+				$extra   = str_contains($preset->args->spec_type, 'mtp') ? $preset->args->spec_draft_n_max : 0;
+				$recurrent = (int)ceil(($blocks - $kvLayers) * $perSeq * (max(1, $preset->args->parallel) + $extra));
+			}
 		}
 
-		$overhead = self::OVERHEAD_FIXED_BYTES + $preset->args->ubatch_size * $info->embeddingLength() * 4;
+		// Compute buffer: see the calibration constants above.
+		$ub = $preset->args->ubatch_size;
+		$overhead = $info->expertCount() > 0
+			? $ub * self::MOE_COMPUTE_BYTES_PER_UBATCH_TOKEN
+			: self::OVERHEAD_FIXED_BYTES + $ub * $info->embeddingLength() * 4;
+
+		// Draft model: its own context at the same n_ctx, f16 KV (llama-server
+		// default for the draft), plus its compute buffer. An MTP head has
+		// nextn_predict_layers layers; a normal draft model all of its own.
+		$draftKv = $draftCompute = 0;
+		if ($draft > 0) {
+			$d = null;
+			try {
+				$d = GgufReader::read((string)$preset->model_draft_path);
+			} catch (\Throwable) {
+			}
+			if ($d !== null) {
+				$layers = (int)$d->archGet('nextn_predict_layers', 0);
+				if ($layers <= 0) {
+					$di     = (int)$d->archGet('full_attention_interval', 0);
+					$layers = $di > 1 ? intdiv($d->blockCount(), $di) : $d->blockCount();
+				}
+				$dctx    = $ctx > 0 ? $ctx : $d->contextLength();
+				$draftKv = (int)ceil($layers * $dctx * ($d->headCountKv() * ($d->keyLength() + $d->valueLength())) * 2.0);
+			}
+			$draftCompute = $ub * self::DRAFT_COMPUTE_BYTES_PER_UBATCH_TOKEN;
+		}
 
 		return [
 			'weights'  => $weights,
 			'kv_cache' => $kv,
+			'kv_indexer' => $indexer,
+			'recurrent'  => $recurrent,
 			'overhead' => $overhead,
 			'mmproj'   => $mmproj,
 			'draft'    => $draft,
+			'draft_kv' => $draftKv,
+			'draft_compute' => $draftCompute,
 		];
 	}
 
