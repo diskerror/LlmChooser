@@ -39,8 +39,8 @@ final class FieldHints
 	private static ?array $loaded = null;
 
 	/**
-	 * Compiled field help from resources/field_help.json, generated from
-	 * FIELD-HELP.md by `llmchooser help-compile`. Loaded once per request.
+	 * Field help from resources/field_help.json, the single source of the
+	 * help shown on the preset form. Loaded once per request.
 	 *
 	 * @return array<string, array{label:string,flag:string,level:string,upstream_default:string,short:string,full:string}>
 	 */
@@ -49,8 +49,7 @@ final class FieldHints
 		if (self::$loaded === null) {
 			$data = json_decode((string)@file_get_contents(self::HELP_FILE), true);
 			if (!is_array($data)) {
-				throw new \RuntimeException('Cannot read or parse ' . self::HELP_FILE
-					. ' — run: llmchooser help-compile <FIELD-HELP.md>');
+				throw new \RuntimeException('Cannot read or parse ' . self::HELP_FILE);
 			}
 			self::$loaded = $data;
 		}

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace LlmChooser\Cli;
 
 use LlmChooser\App;
-use LlmChooser\Http\FieldHelpCompiler;
 use LlmChooser\Memory\Allocation;
 use LlmChooser\Process\AdmissionException;
 use LlmChooser\Process\HealthChecker;
@@ -32,7 +31,6 @@ final class Cli
 	  models                                   list discovered model files
 	  enable  <preset-id>                      allow this preset to be offered/started
 	  disable <preset-id>                      park this preset (stop first if running)
-	  help-compile <FIELD-HELP.md>             write resources/field_help.json
 	  help-drift   <llama-server>              diff --help against the captured copy
 	  set-startup    <preset-id>               start this preset at boot (systemd, needs root)
 	  remove-startup <preset-id>               undo set-startup (needs root)
@@ -104,7 +102,6 @@ final class Cli
 			'models'  => $this->models(),
 			'enable'  => $this->setEnabled($this->needId($pos), true),
 			'disable' => $this->setEnabled($this->needId($pos), false),
-			'help-compile' => $this->helpCompile($pos),
 			'help-drift'   => $this->helpDrift($pos),
 			'set-startup'    => $this->startupCmd('set', $pos),
 			'remove-startup' => $this->startupCmd('remove', $pos),
@@ -227,29 +224,6 @@ final class Cli
 		return 0;
 	}
 
-	/** FIELD-HELP.md -> resources/field_help.json (see FieldHelpCompiler). */
-	private function helpCompile(array $pos): int
-	{
-		$path = $pos[0] ?? '';
-		if ($path === '') {
-			throw new UsageException('Missing path to FIELD-HELP.md');
-		}
-		$md = @file_get_contents($path);
-		if ($md === false) {
-			$this->out->error("Cannot read {$path}");
-			return 1;
-		}
-		$data  = (new FieldHelpCompiler())->compile($md);
-		$out   = dirname(__DIR__, 2) . '/resources/field_help.json';
-		$json  = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
-		if (file_put_contents($out, $json) === false) {
-			$this->out->error("Cannot write {$out}");
-			return 1;
-		}
-		$this->out->line('Compiled ' . count($data) . ' fields to resources/field_help.json');
-		return 0;
-	}
-
 	/**
 	 * Diff a live llama-server --help against the captured reference copy
 	 * (docs/llama-server-help.txt) and report flags that appeared or
@@ -290,7 +264,7 @@ final class Cli
 		foreach ($added as $f) {
 			$this->out->line("+ added:   {$f}");
 		}
-		$this->out->line('Review FIELD-HELP.md for the flags above, then re-run help-compile.');
+		$this->out->line('Review resources/field_help.json for the flags above.');
 		return 1;
 	}
 
