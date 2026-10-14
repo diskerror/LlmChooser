@@ -16,3 +16,7 @@
 # Runtime instance state; rebuilt by reconciling against real processes.
 /storage/runtime_state.json
 .DS_Store
+
+# Per-engine help text captured from the binary (generated).
+/storage/help/*
+!/storage/help/.gitkeep

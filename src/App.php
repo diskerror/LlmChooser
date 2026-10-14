@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace LlmChooser;
 
+use LlmChooser\Engine\EngineHelp;
 use LlmChooser\Engine\EngineRepository;
 use LlmChooser\Memory\LinuxTopologyProbe;
 use LlmChooser\Memory\MemoryService;
@@ -18,6 +19,7 @@ final class App
 {
 	public readonly PresetRepository $presets;
 	public readonly EngineRepository $engines;
+	public readonly EngineHelp $help;
 	public readonly RuntimeState $state;
 	public readonly MemoryService $memory;
 	public readonly ProcessManager $processes;
@@ -26,6 +28,7 @@ final class App
 	{
 		$this->presets   = new PresetRepository($root . '/storage/presets');
 		$this->engines   = new EngineRepository($root . '/storage/engines');
+		$this->help      = new EngineHelp($root . '/storage/help', $root . '/docs/llama-server-help.txt');
 		$this->state     = new RuntimeState($root . '/storage/runtime_state.json');
 		$this->memory    = new MemoryService($probe ?? new LinuxTopologyProbe());
 		$this->processes = new ProcessManager(
