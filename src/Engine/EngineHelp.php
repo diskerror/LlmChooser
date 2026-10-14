@@ -48,7 +48,7 @@ final class EngineHelp
 		if ($entries === []) {
 			throw new RuntimeException('no options found in the --help output');
 		}
-		$version = trim((string)(($this->run)([$binary, '--version'], dirname($binary)) ?? ''));
+		$version = self::versionLine((string)(($this->run)([$binary, '--version'], dirname($binary)) ?? ''));
 		$data    = [
 			'version'     => $version,
 			'captured_at' => gmdate('c'),
@@ -99,6 +99,22 @@ final class EngineHelp
 			'captured_at' => '',
 			'entries'     => HelpParser::parse((string)@file_get_contents($this->bundledFile)),
 		];
+	}
+
+	/**
+	 * The "version: N (commit)" line of --version output. stderr is merged in,
+	 * so backend start-up chatter (Vulkan device lists, shader-cache warnings,
+	 * ...) can precede it; fall back to the first non-empty line.
+	 */
+	public static function versionLine(string $output): string
+	{
+		$lines = array_values(array_filter(array_map('trim', preg_split('/\R/', $output) ?: []), static fn(string $l): bool => $l !== ''));
+		foreach ($lines as $l) {
+			if (stripos($l, 'version:') === 0) {
+				return $l;
+			}
+		}
+		return $lines[0] ?? '';
 	}
 
 	/** @param array<string,mixed> $data */

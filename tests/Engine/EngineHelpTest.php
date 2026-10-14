@@ -96,4 +96,12 @@ class EngineHelpTest extends TestCase
 		$h->delete('e1');
 		$this->assertSame('bundled', $h->forEngine('e1')['source']);
 	}
+
+	public function test_version_line_skips_backend_chatter(): void
+	{
+		$out = "Failed to create /var/www/.cache for shader cache (Permission denied)---disabling.\nggml_vulkan: Found 1 Vulkan devices\nversion: 0.4.0-dev (build 10830, commit 465e49b9c)\nbuilt with GNU 14.2.0\n";
+		$this->assertSame('version: 0.4.0-dev (build 10830, commit 465e49b9c)', EngineHelp::versionLine($out));
+		$this->assertSame('first line', EngineHelp::versionLine("\nfirst line\nsecond"));
+		$this->assertSame('', EngineHelp::versionLine(''));
+	}
 }
