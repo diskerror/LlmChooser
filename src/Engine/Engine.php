@@ -13,9 +13,10 @@ class Engine extends TypedClass
 	protected string    $binary_path_default = '';
 	protected string    $model_dir           = '';
 	protected string    $host                = '127.0.0.1';
-	// Does this llama-server build accept --metrics? The dashboard's status
-	// column reads /metrics for token rates and the context high-water mark.
-	protected bool      $metrics             = true;
+	// Flags appended to EVERY preset's command line on this engine, before
+	// the preset's own extra_flags (so a preset can still override them).
+	// --metrics is not here: CommandBuilder always passes it.
+	protected string    $extra_flags         = '';
 
 	// protected, NOT public: a nested TypedMinMax only gets its coercion when
 	// it is non-public — see TypedClass::_setByName(). Access stays public via

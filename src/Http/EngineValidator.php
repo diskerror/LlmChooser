@@ -34,6 +34,13 @@ final class EngineValidator
 			$errors['binary_path_default'] = 'Required';
 		}
 
+		foreach (\LlmChooser\Process\CommandBuilder::splitFlags($e->extra_flags) as $flag) {
+			if ($flag === '--host' || $flag === '--port') {
+				$errors['extra_flags'] = '--host and --port are managed by LlmChooser';
+				break;
+			}
+		}
+
 		if ($e->host === '') {
 			$errors['host'] = 'Required';
 		}

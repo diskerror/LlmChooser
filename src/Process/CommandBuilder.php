@@ -111,7 +111,9 @@ final class CommandBuilder
 		$argv[] = '--threads';
 		$argv[] = (string)$a->threads;
 
-		$extra = self::splitFlags($a->extra_flags);
+		// Engine-wide flags first, then the preset's: for last-wins flags the
+		// preset overrides the engine.
+		$extra = [...self::splitFlags($engine->extra_flags), ...self::splitFlags($a->extra_flags)];
 		foreach ($extra as $flag) {
 			// --host/--port are owned by port management; letting a preset
 			// override them would desync the state from what is bound.
@@ -119,9 +121,9 @@ final class CommandBuilder
 				throw new RuntimeException('extra_flags must not set --host or --port');
 			}
 		}
-		// An engine property (the build either has /metrics or it does not).
-		// Skipped when extra_flags already carries it, so it is never doubled.
-		if ($engine->metrics && !in_array('--metrics', $extra, true)) {
+		// Always on: the dashboard's status column reads /metrics for token
+		// rates and the context high-water mark. Never doubled.
+		if (!in_array('--metrics', $extra, true)) {
 			$argv[] = '--metrics';
 		}
 		array_push($argv, ...$extra);

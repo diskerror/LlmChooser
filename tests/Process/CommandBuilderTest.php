@@ -85,12 +85,8 @@ class CommandBuilderTest extends TestCase
         $this->assertSame('2', $argv[$i + 3]);
     }
 
-    public function test_metrics_follows_engine_and_is_never_doubled(): void
+    public function test_metrics_always_on_and_never_doubled(): void
     {
-        $off = new Engine(['id' => 'e', 'binary_path_default' => '/bin/llama-server', 'metrics' => false]);
-        $cmd = $this->builder->build(new Preset(['id' => 'p1', 'model_path' => '/m.gguf']), $off, 5850);
-        $this->assertNotContains('--metrics', $cmd->argv);
-
         $plain = $this->builder->build(new Preset(['id' => 'p1', 'model_path' => '/m.gguf']), $this->engine(), 5850);
         $this->assertSame(1, count(array_keys($plain->argv, '--metrics', true)));
         $dup = $this->builder->build(
@@ -99,6 +95,34 @@ class CommandBuilderTest extends TestCase
             5850
         );
         $this->assertSame(1, count(array_keys($dup->argv, '--metrics', true)));
+        $eng = new Engine(['id' => 'e', 'binary_path_default' => '/bin/llama-server', 'extra_flags' => '--metrics']);
+        $viaEngine = $this->builder->build(new Preset(['id' => 'p1', 'model_path' => '/m.gguf']), $eng, 5850);
+        $this->assertSame(1, count(array_keys($viaEngine->argv, '--metrics', true)));
+    }
+
+    public function test_engine_extra_flags_come_before_preset_extra_flags(): void
+    {
+        $eng = new Engine(['id' => 'e', 'binary_path_default' => '/bin/llama-server', 'extra_flags' => '--verbose --fit off']);
+        $cmd = $this->builder->build(
+            new Preset(['id' => 'p1', 'model_path' => '/m.gguf', 'args' => ['extra_flags' => '--fit on']]),
+            $eng,
+            5850
+        );
+        $this->assertSame(['--verbose', '--fit', 'off', '--fit', 'on'], array_slice($cmd->argv, -5));
+    }
+
+    public function test_engine_extra_flags_cannot_set_host_or_port(): void
+    {
+        $eng = new Engine(['id' => 'e', 'binary_path_default' => '/bin/llama-server', 'extra_flags' => '--port 1']);
+        $this->expectException(\RuntimeException::class);
+        $this->builder->build(new Preset(['id' => 'p1', 'model_path' => '/m.gguf']), $eng, 5850);
+    }
+
+    public function test_legacy_engine_json_with_metrics_key_still_loads(): void
+    {
+        $eng = new Engine(['id' => 'e', 'binary_path_default' => '/bin/llama-server', 'metrics' => false]);
+        $cmd = $this->builder->build(new Preset(['id' => 'p1', 'model_path' => '/m.gguf']), $eng, 5850);
+        $this->assertContains('--metrics', $cmd->argv);
     }
 
     public function test_extra_flags_appended_last(): void
