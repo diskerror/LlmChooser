@@ -655,6 +655,84 @@ class WebAppTest extends TestCase
 		$this->assertStringContainsString('/engines/new?copy=e', $body);
 	}
 
+	private function helpBinary(): string
+	{
+		$bin = $this->dir . '/help-bin';
+		file_put_contents($bin, "#!/bin/sh\nif [ \"\$1\" = \"--version\" ]; then echo 'version: 7 (xyz)' >&2; exit 0; fi\n"
+			. "cat <<'EOF'\n-c,    --ctx-size N                     size of the prompt context\nEOF\n");
+		chmod($bin, 0755);
+		return $bin;
+	}
+
+	private function enginePost(array $extra): array
+	{
+		return $extra + [
+			'id' => 'e', 'name' => 'E', 'binary_path_default' => $this->helpBinary(),
+			'model_dir' => $this->dir . '/models', 'host' => '127.0.0.1', 'port_min' => '5880', 'port_max' => '5889',
+		];
+	}
+
+	public function testBinaryCheckEndpoint(): void
+	{
+		$j = fn(string $path) => json_decode($this->post('/api/binary-check', ['path' => $path])->body, true)['problem'];
+		$this->assertSame('binary not found', $j($this->dir . '/nope'));
+		$this->assertNull($j($this->helpBinary()));
+		$this->assertNull($j(''));
+	}
+
+	public function testEngineFormFlagsMissingBinaryAndDisablesReload(): void
+	{
+		$this->app->engines->save(new Engine(['id' => 'gone', 'name' => 'G', 'binary_path_default' => $this->dir . '/nope']));
+		$body = $this->get('/engines/gone/edit')->body;
+		$this->assertStringContainsString('<span class="binary-msg" role="alert">binary not found</span>', $body);
+		$this->assertMatchesRegularExpression('/<input type="checkbox" name="reload_help"[^>]* disabled>/', $body);
+
+		$ok = $this->get('/engines/e/edit')->body;
+		$this->assertStringContainsString('<span class="binary-msg" role="alert"></span>', $ok);
+		$this->assertDoesNotMatchRegularExpression('/name="reload_help"[^>]* disabled/', $ok);
+	}
+
+	public function testSavingWithReloadCapturesHelpFromTheBinary(): void
+	{
+		$res = $this->post('/engines/e/edit', $this->enginePost(['reload_help' => '1']));
+		$this->assertSame(303, $res->status);
+		$this->assertStringContainsString('help reloaded (1 options, version: 7 (xyz))', urldecode($res->headers['Location']));
+		$this->assertSame('size of the prompt context', $this->app->help->forEngine('e')['entries']['--ctx-size']['text']);
+		$this->assertStringContainsString('captured', $this->get('/engines/e/edit')->body);
+	}
+
+	public function testSavingWithoutReloadLeavesHelpAlone(): void
+	{
+		$res = $this->post('/engines/e/edit', $this->enginePost([]));
+		$this->assertStringNotContainsString('help', urldecode($res->headers['Location']));
+		$this->assertSame('bundled', $this->app->help->forEngine('e')['source']);
+	}
+
+	public function testSavingWithMissingBinarySavesButSkipsReloadAndWarns(): void
+	{
+		$res = $this->post('/engines/e/edit', $this->enginePost(['binary_path_default' => $this->dir . '/nope', 'reload_help' => '1']));
+		$this->assertSame(303, $res->status);
+		$this->assertStringContainsString('help not reloaded: binary not found', urldecode($res->headers['Location']));
+		$this->assertSame($this->dir . '/nope', $this->app->engines->load('e')->binary_path_default);
+		$this->assertSame('bundled', $this->app->help->forEngine('e')['source']);
+	}
+
+	public function testPresetFormFlagsMissingBinaryPath(): void
+	{
+		$p = $this->app->presets->load('p1');
+		$p->binary_path = $this->dir . '/nope';
+		$this->app->presets->save($p);
+		$this->assertStringContainsString('<span class="binary-msg" role="alert">binary not found</span>', $this->get('/presets/p1/edit')->body);
+	}
+
+	public function testDeletingAnEngineRemovesItsCapturedHelp(): void
+	{
+		$this->post('/engines/new', $this->enginePost(['id' => 'tmp', 'reload_help' => '1']));
+		$this->assertSame('engine', $this->app->help->forEngine('tmp')['source']);
+		$this->post('/engines/tmp/delete');
+		$this->assertSame('bundled', $this->app->help->forEngine('tmp')['source']);
+	}
+
 	public function testEngineNewForm(): void
 	{
 		$res = $this->get('/engines/new');

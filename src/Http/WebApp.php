@@ -6,6 +6,7 @@ namespace LlmChooser\Http;
 
 use LlmChooser\App;
 use LlmChooser\Cli\Format;
+use LlmChooser\Engine\BinaryCheck;
 use LlmChooser\Engine\Engine;
 use LlmChooser\Memory\Allocation;
 use LlmChooser\Memory\MemoryEstimator;
@@ -75,6 +76,7 @@ final class WebApp
 		$rt->add('POST', '/engines/{id}/delete', fn(Request $r, array $p): Response => $this->engineDelete($p['id']));
 		$rt->add('GET', '/health', fn(Request $r): Response => Response::json(['status' => 'ok']));
 		$rt->add('GET', '/api/status', fn(Request $r): Response => $this->apiStatus());
+		$rt->add('POST', '/api/binary-check', fn(Request $r): Response => Response::json(['problem' => BinaryCheck::problem((string)($r->post['path'] ?? ''))]));
 		$rt->add('POST', '/api/preset-estimate', fn(Request $r): Response => $this->apiPresetEstimate($r));
 		$rt->add('GET', '/api/dashboard-panels', fn(Request $r): Response => $this->apiDashboardPanels());
 		$rt->add('GET', '/assets/style.css', fn(Request $r): Response => $this->css());
@@ -562,7 +564,7 @@ final class WebApp
 		} else {
 			$engine = new Engine();
 		}
-		return Response::html(Html::page('New engine', EngineForm::render($engine, true), $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all())));
+		return Response::html(Html::page('New engine', EngineForm::render($engine, true, [], null, true), $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all())));
 	}
 
 	private function engineCreate(Request $r): Response
@@ -571,12 +573,12 @@ final class WebApp
 		$errors = EngineValidator::validate($engine, true, $this->app->engines);
 		if ($errors !== []) {
 			return Response::html(
-				Html::page('New engine', EngineForm::render($engine, true, $errors), '', '', $r->path, $this->headerSummary($this->app->state->all())),
+				Html::page('New engine', EngineForm::render($engine, true, $errors, null, ($r->post['reload_help'] ?? '') === '1'), '', '', $r->path, $this->headerSummary($this->app->state->all())),
 				422
 			);
 		}
 		$this->app->engines->save($engine);
-		return Response::redirect('/engines', 'Created ' . $engine->id);
+		return Response::redirect('/engines', 'Created ' . $engine->id . $this->afterEngineSave($engine, $r));
 	}
 
 	private function engineEdit(Request $r, string $id): Response
@@ -586,7 +588,7 @@ final class WebApp
 		} catch (Throwable) {
 			return Response::html(Html::page('Not found', '<p>No engine ' . Html::e($id) . '.</p>', '', '', $r->path, $this->headerSummary($this->app->state->all())), 404);
 		}
-		return Response::html(Html::page('Edit ' . $id, EngineForm::render($engine, false), $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all())));
+		return Response::html(Html::page('Edit ' . $id, EngineForm::render($engine, false, [], $this->engineHelpInfo($id)), $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all())));
 	}
 
 	private function engineSave(Request $r, string $id): Response
@@ -602,15 +604,49 @@ final class WebApp
 		$errors = EngineValidator::validate($engine, false, $this->app->engines);
 		if ($errors !== []) {
 			return Response::html(
-				Html::page('Edit ' . $id, EngineForm::render($engine, false, $errors), '', '', $r->path, $this->headerSummary($this->app->state->all())),
+				Html::page('Edit ' . $id, EngineForm::render($engine, false, $errors, $this->engineHelpInfo($id), ($r->post['reload_help'] ?? '') === '1'), '', '', $r->path, $this->headerSummary($this->app->state->all())),
 				422
 			);
 		}
 		$this->app->engines->save($engine);
-		return Response::redirect('/engines', 'Saved ' . $id);
+		return Response::redirect('/engines', 'Saved ' . $id . $this->afterEngineSave($engine, $r));
 	}
 
 	/** Refuses when a preset still references the engine (GUI-DESIGN.md-style guard, same shape as preset delete). */
+	/** @return array{source:string,version:string,captured_at:string} */
+	private function engineHelpInfo(string $id): array
+	{
+		$h = $this->app->help->forEngine($id);
+		return ['source' => $h['source'], 'version' => $h['version'], 'captured_at' => $h['captured_at']];
+	}
+
+	/**
+	 * After an engine is saved: optionally reload its help text from the
+	 * binary, and warn (never block) when the binary is unusable. Returns the
+	 * text to append to the flash message.
+	 */
+	private function afterEngineSave(Engine $engine, Request $r): string
+	{
+		$problem = BinaryCheck::problem($engine->binary_path_default);
+		$note    = '';
+		if (($r->post['reload_help'] ?? '') === '1') {
+			if ($problem !== null) {
+				$note = ' — help not reloaded: ' . $problem;
+			} else {
+				try {
+					$h    = $this->app->help->capture($engine->id, $engine->binary_path_default);
+					$note = ' — help reloaded (' . count($h['entries']) . ' options' . ($h['version'] !== '' ? ', ' . strtok($h['version'], "\n") : '') . ')';
+				} catch (Throwable $e) {
+					$note = ' — help reload failed: ' . $e->getMessage();
+				}
+			}
+		}
+		if ($problem !== null && !str_contains($note, $problem)) {
+			$note .= ' — warning: ' . $problem;
+		}
+		return $note;
+	}
+
 	private function engineDelete(string $id): Response
 	{
 		$usedBy = $this->engineUsedByMap()[$id] ?? [];
@@ -618,6 +654,7 @@ final class WebApp
 			return Response::redirect('/engines', 'In use by ' . implode(', ', $usedBy) . ' — repoint those presets first');
 		}
 		$this->app->engines->delete($id);
+		$this->app->help->delete($id);
 		return Response::redirect('/engines', 'Deleted ' . $id);
 	}
 

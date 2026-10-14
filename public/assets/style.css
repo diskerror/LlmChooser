@@ -253,3 +253,7 @@ th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .help .help-src { font-weight: 600; color: var(--muted); }
 .help .help-upstream { border-left: 3px solid var(--line); padding-left: .5rem; }
 .help .help-stale { color: #a00; font-weight: 600; }
+
+/* "binary not found" note next to a path field */
+.binary-msg { color: #a00; font-weight: 600; }
+.binary-msg:empty { display: none; }

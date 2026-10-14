@@ -190,3 +190,32 @@ if (modelsTable) {
   form.addEventListener('input', refresh);
   form.addEventListener('change', refresh);
 })();
+
+// Binary path fields: when the user leaves the field (and on load), ask the
+// server whether the path is a runnable binary and show a red note if not.
+// A field may name a checkbox (data-disables) that is unusable until it is.
+document.querySelectorAll('input[data-binary-check]').forEach(input => {
+  const msg = input.parentElement.querySelector('.binary-msg');
+  const dep = input.dataset.disables ? document.getElementById(input.dataset.disables) : null;
+  let seq = 0;
+  const check = async () => {
+    const mine = ++seq;
+    const path = input.value.trim();
+    let problem = null;
+    if (path !== '') {
+      try {
+        const res = await fetch('/api/binary-check', { method: 'POST', body: new URLSearchParams({ path }) });
+        problem = (await res.json()).problem;
+      } catch (e) { return; /* server unreachable: leave the note as rendered */ }
+    }
+    if (mine !== seq) return;
+    if (msg) msg.textContent = problem || '';
+    if (dep) {
+      dep.disabled = problem !== null || path === '';
+      if (dep.disabled) dep.checked = false;
+    }
+  };
+  input.addEventListener('blur', check);
+  input.addEventListener('change', check);
+  if (input.value.trim() !== '') check();
+});

@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace LlmChooser\Http;
 
+use LlmChooser\Engine\BinaryCheck;
 use LlmChooser\Engine\Engine;
 
 /** The engine form: id, name, binary path, model directory, host, port range. */
 final class EngineForm
 {
-	/** @param array<string,string> $errors */
-	public static function render(Engine $e, bool $isNew, array $errors = []): string
+	/**
+	 * @param array<string,string> $errors
+	 * @param ?array{source:string,version:string,captured_at:string} $helpInfo what help text the engine currently has
+	 */
+	public static function render(Engine $e, bool $isNew, array $errors = [], ?array $helpInfo = null, bool $reloadHelp = false): string
 	{
 		$action = $isNew ? '/engines/new' : '/engines/' . Html::e($e->id) . '/edit';
 
@@ -26,7 +30,9 @@ final class EngineForm
 		$out .= '<form method="post" action="' . $action . '">';
 		$out .= self::row('id', 'ID', self::input('id', $e->id, ['required', 'pattern' => '(?!\.)(?!.*\.\.)[A-Za-z0-9_.-]+(?&lt;!\.)', 'readonly' => !$isNew]), self::err($errors, 'id'));
 		$out .= self::row('name', 'Name', self::input('name', $e->name, ['required']), self::err($errors, 'name'));
-		$out .= self::row('binary_path_default', 'Binary path', self::input('binary_path_default', $e->binary_path_default, ['required', 'placeholder' => '/path/to/llama-server']), self::err($errors, 'binary_path_default'));
+		$out .= self::row('binary_path_default', 'Binary path', self::input('binary_path_default', $e->binary_path_default, ['required', 'placeholder' => '/path/to/llama-server', 'id' => 'binary-path', 'data-binary-check' => '1', 'data-disables' => 'reload-help']) . self::binaryMsg($e->binary_path_default), self::err($errors, 'binary_path_default'));
+		$binaryProblem = BinaryCheck::problem($e->binary_path_default) !== null || trim($e->binary_path_default) === '';
+		$out .= self::row('reload_help', 'Help text', self::helpControl($helpInfo, $binaryProblem, $reloadHelp), '');
 		$out .= self::row('model_dir', 'Model directory', self::input('model_dir', $e->model_dir, ['placeholder' => 'directory scanned for .gguf models']), self::err($errors, 'model_dir'));
 		$out .= self::row('extra_flags', 'Extra flags', self::input('extra_flags', $e->extra_flags, ['placeholder' => 'e.g. --verbose']) . ' <span class="default">added to every preset on this engine, before the preset\'s own extra flags. --host and --port are not allowed.</span>', self::err($errors, 'extra_flags'));
 		$out .= self::row('host', 'Host', self::input('host', $e->host, ['required']), self::err($errors, 'host'));
@@ -55,6 +61,25 @@ final class EngineForm
 				'max' => (int)($post['port_max'] ?? 0),
 			],
 		];
+	}
+
+	/** Red "binary not found"-style note next to a path field; app.js keeps it current as the field changes. */
+	public static function binaryMsg(string $path): string
+	{
+		return '<span class="binary-msg" role="alert">' . Html::e(BinaryCheck::problem($path) ?? '') . '</span>';
+	}
+
+	/** @param ?array{source:string,version:string,captured_at:string} $info */
+	private static function helpControl(?array $info, bool $disabled, bool $checked): string
+	{
+		$status = 'using the bundled llama.cpp help snapshot';
+		if ($info !== null && $info['source'] === 'engine') {
+			$status = 'captured ' . ($info['captured_at'] !== '' ? substr($info['captured_at'], 0, 10) : '')
+				. ($info['version'] !== '' ? ' from ' . strtok($info['version'], "\n") : '');
+		}
+		return '<label><input type="checkbox" name="reload_help" value="1" id="reload-help"'
+			. ($checked && !$disabled ? ' checked' : '') . ($disabled ? ' disabled' : '') . '> reload help text from the binary when saving</label>'
+			. ' <span class="default">' . Html::e($status) . '</span>';
 	}
 
 	/** @param array<string,string> $errors */

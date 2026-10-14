@@ -312,7 +312,7 @@ final class Cli
 			}
 		}
 
-		$this->out->line('Source: ' . $src['source'] . ($src['version'] !== '' ? ' (' . $src['version'] . ')' : ''));
+		$this->out->line('Source: ' . $src['source'] . ($src['version'] !== '' ? ' (' . strtok($src['version'], "\n") . ')' : ''));
 		foreach ($changed as $name => $h) {
 			$this->out->line("~ changed:  {$name}  ({$fields[$name]['flag']})");
 		}

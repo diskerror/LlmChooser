@@ -98,7 +98,7 @@ final class PresetForm
 			$p->name, $defaults->name, $help, self::err($errors, 'name'));
 		$out .= self::fieldRow('engine_id', self::enginePicker($p, $engines, $help),
 			$p->engine_id, $defaults->engine_id, $help, self::err($errors, 'engine_id'));
-		$out .= self::fieldRow('binary_path', self::textInput('binary_path', $p->binary_path, $help, ['placeholder' => 'engine default']),
+		$out .= self::fieldRow('binary_path', self::textInput('binary_path', $p->binary_path, $help, ['placeholder' => 'engine default', 'data-binary-check' => '1']) . EngineForm::binaryMsg($p->binary_path),
 			$p->binary_path, $defaults->binary_path, $help, self::err($errors, 'binary_path'));
 		$out .= self::fieldRow('model_path', self::modelSelect($p, $models, $help),
 			$p->model_path, $defaults->model_path, $help, self::err($errors, 'model_path'));
