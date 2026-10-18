@@ -38,15 +38,20 @@ final class MemoryEstimator
 	public const OVERHEAD_FIXED_BYTES = 1024 ** 3;
 
 	/**
-	 * Empirical compute/scratch buffer per ubatch token, from ONE llama.cpp
-	 * --verbose log (Qwen3.8-Flash-Next, 512-expert MoE, ubatch 512):
-	 * Vulkan 3345 + host 402 MiB for the main context, 361 MiB for the MTP
-	 * draft context. The graph allocator's size is not derivable from GGUF
-	 * metadata, so these are calibration constants — refine them when more
-	 * logs are available. Dense models keep the older, smaller formula.
+	 * Empirical compute/scratch buffer per ubatch token, from llama.cpp
+	 * --verbose logs (Qwen3.8-Flash-Next, 512-expert MoE). The graph
+	 * allocator's size is not derivable from GGUF metadata, so these are
+	 * calibration constants. Dense models keep the older, smaller formula.
+	 *
+	 * MOE: main-context Vulkan 3345 + host 402 MiB @ ubatch 512 with f32
+	 * KV cache (f16 KV measures lower, ~6.05 M; the f32 value is kept as a
+	 * deliberate upper bound — underestimates are what bite on admission).
+	 * DRAFT: MTP draft-context Vulkan 361 + host 281 MiB @ 512 and
+	 * 90 + 70 MiB @ 128 — exactly linear at ~1.315 M/token once the host
+	 * buffer is included (the old 740k was Vulkan-only and 44% low).
 	 */
 	public const MOE_COMPUTE_BYTES_PER_UBATCH_TOKEN   = 7_677_000;
-	public const DRAFT_COMPUTE_BYTES_PER_UBATCH_TOKEN = 740_000;
+	public const DRAFT_COMPUTE_BYTES_PER_UBATCH_TOKEN = 1_315_000;
 
 	public function estimate(Preset $preset, GgufInfo $info, MemoryTopology $topology): Allocation
 	{
