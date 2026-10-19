@@ -18,6 +18,7 @@ use LlmChooser\Process\ProcessControl;
 use LlmChooser\Process\ProcessManager;
 use LlmChooser\Process\RuntimeState;
 use LlmChooser\Tests\Fixtures\FakeServer;
+use LlmChooser\Tests\Fixtures\ScriptedTopologyProbe;
 use LlmChooser\Tests\Model\GgufFixture;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -305,5 +306,88 @@ class ProcessManagerTest extends TestCase
             proc: $proc,
             stopTimeoutSeconds: 2,
         );
+    }
+
+    private function topo(float $availableGb): MemoryTopology
+    {
+        $g = 1024 ** 3;
+        return new MemoryTopology([
+            new Device('cpu', Device::KIND_RAM, 100 * $g, (int)($availableGb * $g)),
+            new Device('gpu0', Device::KIND_VRAM, $g / 2, (int)($availableGb * $g / 2), 'cpu'),
+        ]);
+    }
+
+    private function scriptedManager(array $topos, int $releaseTimeout): ProcessManager
+    {
+        return new ProcessManager(
+            $this->presets, $this->engines, $this->state,
+            new MemoryService(new ScriptedTopologyProbe($topos)),
+            $this->dir . '/logs',
+            stopTimeoutSeconds: 2,
+            releaseTimeoutSeconds: $releaseTimeout,
+        );
+    }
+
+    public function test_restart_waits_for_driver_release(): void
+    {
+        // The first two admission checks still see the dying instance's
+        // memory as held; the third sees it released and the restart fits.
+        $this->pm->start('p1');
+        $this->pm->waitUntilReady('p1', 10);
+
+        $pm = $this->scriptedManager([$this->topo(0.001), $this->topo(0.001), $this->topo(100)], 5);
+
+        $t0 = microtime(true);
+        $i = $pm->restart('p1');
+        $elapsed = microtime(true) - $t0;
+
+        $this->assertGreaterThan(0, $i->pid);
+        $this->assertSame(Instance::LOADING, $i->status);
+        $this->assertGreaterThanOrEqual(1.9, $elapsed, 'must wait through two refusals');
+        $this->assertLessThan(8, $elapsed);
+    }
+
+    public function test_restart_gives_up_after_release_timeout(): void
+    {
+        $this->pm->start('p1');
+        $this->pm->waitUntilReady('p1', 10);
+
+        $pm = $this->scriptedManager([$this->topo(0.001)], 2);
+
+        $t0 = microtime(true);
+        try {
+            $pm->restart('p1');
+            $this->fail('expected AdmissionException');
+        } catch (AdmissionException $e) {
+            $this->assertStringContainsString('Not enough memory', $e->getMessage());
+        }
+        $this->assertGreaterThanOrEqual(1.9, microtime(true) - $t0, 'must use the release window');
+        $this->assertLessThan(6, microtime(true) - $t0);
+        $this->assertNull($this->state->get('p1'), 'old instance stays stopped');
+    }
+
+    public function test_start_evicting_waits_for_release_before_next_victim(): void
+    {
+        // p2 does not fit while p1 runs. After evicting p1 the first check
+        // is still stale; the retry inside the release window succeeds, so
+        // exactly one victim is evicted.
+        $this->pm->start('p1');
+        $this->pm->waitUntilReady('p1', 10);
+        $this->presets->save(new Preset([
+            'id' => 'p2',
+            'engine_id' => 'e',
+            'model_path' => $this->dir . '/models/m.gguf',
+        ]));
+
+        $pm = $this->scriptedManager([$this->topo(0.001), $this->topo(0.001), $this->topo(100)], 5);
+
+        $t0 = microtime(true);
+        $evicted = $pm->startEvicting('p2', $started);
+        $elapsed = microtime(true) - $t0;
+
+        $this->assertSame(['p1'], $evicted);
+        $this->assertNotNull($started);
+        $this->assertGreaterThan(0, $started->pid);
+        $this->assertGreaterThanOrEqual(0.9, $elapsed, 'must wait after eviction before retrying');
     }
 }

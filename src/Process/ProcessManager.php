@@ -34,7 +34,8 @@ final class ProcessManager
 		private readonly CommandBuilder $builder = new CommandBuilder(),
 		private readonly ProcessControl $proc = new ProcessControl(),
 		private readonly HealthChecker $health = new HealthChecker(),
-		private readonly int $stopTimeoutSeconds = 30,
+		private readonly int $stopTimeoutSeconds = 15,
+		private readonly int $releaseTimeoutSeconds = 15,
 	) {}
 
 	public function start(string $presetId, bool $force = false): Instance
@@ -140,7 +141,12 @@ final class ProcessManager
 		$evicted = [];
 		while (true) {
 			try {
-				$started = $this->start($presetId);
+				// After an eviction, allow driver-release time before naming
+				// the next victim: stale "available" readings would otherwise
+				// evict more instances than the freed memory actually needs.
+				$started = $evicted === []
+					? $this->start($presetId)
+					: $this->startAllowingRelease($presetId);
 				return $evicted;
 			} catch (AdmissionException $e) {
 				$victims = [];
@@ -228,10 +234,36 @@ final class ProcessManager
 		});
 	}
 
+	/**
+	 * Stop, then start. A killed llama-server releases its pinned GTT/VRAM
+	 * in the driver only seconds AFTER the process is reaped, so an immediate
+	 * admission check would measure the dying instance's memory as still
+	 * held and refuse a restart that fits. Retry admission briefly before
+	 * giving up; a genuine over-commit still fails, just later.
+	 */
 	public function restart(string $presetId, bool $force = false): Instance
 	{
 		$this->stop($presetId);
-		return $this->start($presetId, $force);
+		return $this->startAllowingRelease($presetId, $force);
+	}
+
+	/**
+	 * start() with a bounded grace period for driver memory release: on
+	 * admission refusal, re-check every second up to releaseTimeoutSeconds.
+	 */
+	private function startAllowingRelease(string $presetId, bool $force = false): Instance
+	{
+		$deadline = microtime(true) + $this->releaseTimeoutSeconds;
+		while (true) {
+			try {
+				return $this->start($presetId, $force);
+			} catch (AdmissionException $e) {
+				if (microtime(true) >= $deadline) {
+					throw $e;
+				}
+				sleep(1);
+			}
+		}
 	}
 
 	/**
