@@ -90,7 +90,7 @@ Later, nginx + php-fpm can replace `php -S` without code changes
    needs binary `/opt/llama.cpp-ngrams/build/bin/llama-server`, mmproj and
    draft (mtp) paths from the "shared" folder, `spec_type draft-mtp`,
    `spec_draft_n_max 2`, `parallel 1`, and extra_flags
-   `--fit off --lazy-mode on --metrics`.
+   `--fit off --lazy-mode on`.
 2. Start one preset from the dashboard; test it:
    `curl -N http://<host>:8090/v1/chat/completions?preset=ID ...`
 3. Point ONE client (e.g. a test profile) at

@@ -89,7 +89,7 @@
         "level": "basic",
         "upstream_default": "n/a",
         "short": "Free-form notes; not used by anything.",
-        "notes": "Record why the preset exists and what you tuned. Your future self will want\nit.\n\n---\n\n## Context & memory"
+        "notes": "Record why the preset exists and what you tuned. Your future self will want\nit."
     },
     "ctx_size": {
         "label": "Context size",
@@ -178,7 +178,7 @@
         "level": "advanced",
         "upstream_default": "-1 (auto)",
         "short": "CPU threads for generation (-1 = auto).",
-        "notes": "This only matters for the parts running on the CPU (layers not offloaded,\nor a pure CPU run). With everything on the GPU it barely matters. When the\nCPU does matter, the best value is usually the number of **physical**\ncores, not logical threads. More can be slower because of\nmemory-bandwidth contention.\n\n---\n\n## GPU",
+        "notes": "This only matters for the parts running on the CPU (layers not offloaded,\nor a pure CPU run). With everything on the GPU it barely matters. When the\nCPU does matter, the best value is usually the number of **physical**\ncores, not logical threads. More can be slower because of\nmemory-bandwidth contention.",
         "reviewed": "fb7b79ed3e3f"
     },
     "n_gpu_layers": {
@@ -286,7 +286,7 @@
         "level": "advanced",
         "upstream_default": "-1 (random)",
         "short": "Random seed (-1 = different every time).",
-        "notes": "A fixed seed gives repeatable output for the same prompt and settings,\nwhich is useful when comparing presets. It is only repeatable with the\nsame build, slot, and batch configuration.\n\n---\n\n## Speculative decoding",
+        "notes": "A fixed seed gives repeatable output for the same prompt and settings,\nwhich is useful when comparing presets. It is only repeatable with the\nsame build, slot, and batch configuration.",
         "reviewed": "75f76296aef1"
     },
     "spec_type": {
@@ -304,7 +304,7 @@
         "level": "advanced",
         "upstream_default": "3",
         "short": "How many tokens to guess ahead per step.",
-        "notes": "More guesses mean bigger wins when they're right and more wasted work when\nthey're wrong. MTP heads are accurate for only 1–3 tokens (use 2). Small\ndraft models are good for 4–8. Ngram methods on repetitive text can use\n16+. Note the preset default is 16 versus llama.cpp's 3, which suits\nngram/draft models; **lower it for MTP**.\n\n---\n\n## Chat",
+        "notes": "More guesses mean bigger wins when they're right and more wasted work when\nthey're wrong. MTP heads are accurate for only 1–3 tokens (use 2). Small\ndraft models are good for 4–8. Ngram methods on repetitive text can use\n16+. Note the preset default is 16 versus llama.cpp's 3, which suits\nngram/draft models; **lower it for MTP**.",
         "reviewed": "74ee6306dab0"
     },
     "alias": {
@@ -331,7 +331,7 @@
         "level": "basic",
         "upstream_default": "default (template decides)",
         "short": "How hard reasoning models think before answering.",
-        "notes": "For models that support it (gpt-oss, some Qwen/DeepSeek variants), this\ntrades answer quality against time and tokens. `low` is fast and fine for\nchat. `high`/`max` suits hard maths and code, but can think for thousands\nof tokens. Models without an effort control ignore it. Clients can usually\noverride it per request.\n\n---\n\n## Other",
+        "notes": "For models that support it (gpt-oss, some Qwen/DeepSeek variants), this\ntrades answer quality against time and tokens. `low` is fast and fine for\nchat. `high`/`max` suits hard maths and code, but can think for thousands\nof tokens. Models without an effort control ignore it. Clients can usually\noverride it per request.",
         "reviewed": "2e43c9cd231e"
     },
     "extra_flags": {
@@ -340,6 +340,6 @@
         "level": "advanced",
         "upstream_default": "none",
         "short": "Any other llama-server options, appended to the command line.",
-        "notes": "This is the escape hatch for everything without its own field, e.g.\n`--fit off --lazy-mode on --metrics`, `--rope-scaling yarn`,\n`--threads-batch 16`. Not allowed: `--host`, `--port` (LlmChooser owns\nthem). If you find yourself using a flag in many presets, ask for it to\nbecome a real field."
+        "notes": "This is the escape hatch for everything without its own field, e.g.\n`--fit off --lazy-mode on`, `--rope-scaling yarn`, `--threads-batch 16`.\nNot allowed: `--host`, `--port`, `--metrics` (LlmChooser owns\nthem). If you find yourself using a flag in many presets, ask for it to\nbecome a real field."
     }
 }

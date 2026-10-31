@@ -11,10 +11,6 @@ and see what it costs in memory before you load it.
 
 ## Motivation
 
-- **A GUI for settings.** llama-server has a long list of flags; a form beats
-  a shell history.
-- **Hands-on understanding.** Seeing every setting, its default and what it
-  does is a good way to learn what the knobs actually change.
 - **See the memory a model really needs.** Weights, KV cache and the rest add
   up to more than the file size, and loading a model that doesn't fit is a slow
   way to find out.
@@ -25,6 +21,10 @@ and see what it costs in memory before you load it.
   n-gram tables and MTP draft models needed first-class handling.
 - **Clearer help.** Each setting has a short hint, with full help one click
   away.
+- **A GUI for settings.** llama-server has a long list of flags; a form beats
+  a shell history.
+- **Hands-on understanding.** Seeing every setting, its default and what it
+  does is a good way to learn what the knobs actually change.
 
 ## What you get
 
