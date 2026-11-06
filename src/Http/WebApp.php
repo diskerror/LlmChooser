@@ -118,7 +118,7 @@ final class WebApp
 	private function loadedTable(string $rows): string
 	{
 		return '<table><tr><th>Preset</th><th>Model</th><th>Status</th><th class="num">Port</th><th class="num">Ctx</th>'
-			. '<th class="num">Memory (est. GB)</th><th>Uptime</th><th>Last used</th><th>Actions</th></tr>'
+			. '<th class="num">Est. Memory (GB)</th><th>Uptime</th><th>Last used</th><th>Actions</th></tr>'
 			. '<tbody id="loaded-tbody">'
 			. ($rows !== '' ? $rows : '<tr><td colspan="9">Nothing loaded.</td></tr>')
 			. '</tbody></table>';
