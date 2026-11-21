@@ -61,6 +61,10 @@ final class PresetValidator
 			$errors['args.tensor_split'] = 'comma-separated ratios, e.g. 3,1';
 		}
 
+		if ($p->args->repeat_last_n < -1) {
+			$errors['args.repeat_last_n'] = '-1 (whole context), 0 (off) or more';
+		}
+
 		if (preg_match('/(^|\s)--(host|port)(\s|=|$)/', (string)$p->args->extra_flags)) {
 			$errors['args.extra_flags'] = 'Must not set --host or --port';
 		}

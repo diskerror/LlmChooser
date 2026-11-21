@@ -22,6 +22,9 @@ class PresetArgsTest extends TestCase
         $this->assertTrue($args->jinja);
         $this->assertSame('none', $args->spec_type);
         $this->assertSame(16, $args->spec_draft_n_max);
+        $this->assertSame(64, $args->repeat_last_n);
+        $this->assertSame('on', $args->fit);
+        $this->assertSame('auto', $args->lazy_mode);
     }
 
     public function test_override_changes_only_given_fields(): void

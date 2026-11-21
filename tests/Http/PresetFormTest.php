@@ -63,8 +63,9 @@ class PresetFormTest extends TestCase
 		$html = PresetForm::render(new Preset(['id' => '', 'engine_id' => 'e']), $this->models(), true);
 		$this->assertStringContainsString('name="args[temp]"', $html);
 		$this->assertMatchesRegularExpression('/<select[^>]*name="args\[flash_attn\]"/', $html);
-		$this->assertStringContainsString('<input type="hidden" name="args[jinja]" value="0">', $html);
-		$this->assertMatchesRegularExpression('/<input type="checkbox" name="args\[jinja\]" value="1" checked[^>]*>/', $html);
+		$this->assertStringContainsString('<input type="hidden" name="args\[jinja\]" value="0">', $html);
+		$this->assertMatchesRegularExpression('/<input type="checkbox" name="args\[jinja\]" value="1" 
+		checked[^>]*>/', $html);
 		foreach ((new PresetArgs())->getPublicNames() as $name) {
 			$this->assertStringContainsString('name="args[' . $name . ']"', $html, "missing field {$name}");
 		}
@@ -126,6 +127,17 @@ class PresetFormTest extends TestCase
 		// forbidden extra flags
 		$e = PresetValidator::validate(new Preset(['id' => 'q', 'name' => 'N', 'engine_id' => 'e', 'model_path' => '/x.gguf', 'args' => ['extra_flags' => '--port 1']]), $engines, true, $presets);
 		$this->assertSame('Must not set --host or --port', $e['args.extra_flags']);
+
+		// repeat window: -1 (whole context) is the lowest legal value
+		$e = PresetValidator::validate(new Preset(['id' => 'q', 'name' => 'N', 'engine_id' => 'e', 'model_path' => '/x.gguf', 'args' => ['repeat_last_n' => -2]]), $engines, true, $presets);
+		$this->assertArrayHasKey('args.repeat_last_n', $e);
+		$e = PresetValidator::validate(new Preset(['id' => 'q', 'name' => 'N', 'engine_id' => 'e', 'model_path' => '/x.gguf', 'args' => ['repeat_last_n' => -1]]), $engines, true, $presets);
+		$this->assertArrayNotHasKey('args.repeat_last_n', $e);
+
+		// new select fields reject values outside their domain
+		$e = PresetValidator::validate(new Preset(['id' => 'q', 'name' => 'N', 'engine_id' => 'e', 'model_path' => '/x.gguf', 'args' => ['fit' => 'maybe', 'lazy_mode' => 'sometimes']]), $engines, true, $presets);
+		$this->assertSame('Not an allowed value', $e['args.fit']);
+		$this->assertSame('Not an allowed value', $e['args.lazy_mode']);
 
 		// select domain
 		$e = PresetValidator::validate(new Preset(['id' => 'q', 'name' => 'N', 'engine_id' => 'e', 'model_path' => '/x.gguf', 'args' => ['flash_attn' => 'sideways']]), $engines, true, $presets);

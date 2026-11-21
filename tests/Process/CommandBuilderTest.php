@@ -160,6 +160,36 @@ class CommandBuilderTest extends TestCase
         $this->assertSame(['--b', ''], CommandBuilder::splitFlags('--b ""'));
     }
 
+    public function test_fit_and_repeat_last_n_always_emitted(): void
+    {
+        $cmd = $this->builder->build(new Preset(['id' => 'p1', 'model_path' => '/m.gguf']), $this->engine(), 5850);
+        $this->assertPair($cmd->argv, '--fit', 'on');
+        $this->assertPair($cmd->argv, '--repeat-last-n', '64');
+
+        $cmd = $this->builder->build(
+            new Preset(['id' => 'p1', 'model_path' => '/m.gguf', 'args' => ['fit' => 'off', 'repeat_last_n' => 256]]),
+            $this->engine(),
+            5850
+        );
+        $this->assertPair($cmd->argv, '--fit', 'off');
+        $this->assertPair($cmd->argv, '--repeat-last-n', '256');
+    }
+
+    public function test_lazy_mode_only_emitted_when_not_auto(): void
+    {
+        $cmd = $this->builder->build(new Preset(['id' => 'p1', 'model_path' => '/m.gguf']), $this->engine(), 5850);
+        $this->assertNotContains('--lazy-mode', $cmd->argv);
+
+        foreach (['on', 'off'] as $mode) {
+            $cmd = $this->builder->build(
+                new Preset(['id' => 'p1', 'model_path' => '/m.gguf', 'args' => ['lazy_mode' => $mode]]),
+                $this->engine(),
+                5850
+            );
+            $this->assertPair($cmd->argv, '--lazy-mode', $mode);
+        }
+    }
+
     public function test_missing_model_throws(): void
     {
         $this->expectException(RuntimeException::class);

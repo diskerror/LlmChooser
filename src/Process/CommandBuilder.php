@@ -73,6 +73,15 @@ final class CommandBuilder
 		$argv[] = (string)$a->parallel;
 
 		$argv[] = $a->no_context_shift ? '--no-context-shift' : '--context-shift';
+		$argv[] = '--fit';
+		$argv[] = $a->fit;
+
+		// Only when set: older llama-server builds lack --lazy-mode, and 'auto'
+		// is its default.
+		if ($a->lazy_mode !== 'auto') {
+			$argv[] = '--lazy-mode';
+			$argv[] = $a->lazy_mode;
+		}
 
 		$argv[] = '--temp';
 		$argv[] = self::num($a->temp);
@@ -84,6 +93,8 @@ final class CommandBuilder
 		$argv[] = self::num($a->min_p);
 		$argv[] = '--repeat-penalty';
 		$argv[] = self::num($a->repeat_penalty);
+		$argv[] = '--repeat-last-n';
+		$argv[] = (string)$a->repeat_last_n;
 		$argv[] = '--presence-penalty';
 		$argv[] = self::num($a->presence_penalty);
 		$argv[] = '--frequency-penalty';
