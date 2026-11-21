@@ -33,15 +33,11 @@ final class ModelEntry
 
 	public function toArray(): array
 	{
-		return [
-			'path'         => $this->path,
-			'display_name' => $this->displayName,
-			'size_bytes'   => $this->sizeBytes,
-			'shard_paths'  => $this->shardPaths,
-			'sidecars'     => $this->sidecars,
-			'architecture' => $this->info?->architecture(),
-			'context_length' => $this->info?->contextLength(),
-			'error'        => $this->error,
-		];
+		$a = get_object_vars($this);
+
+		$a['architecture']   = $this->info?->architecture();
+		$a['context_length'] = $this->info?->contextLength();
+		
+		return $a;
 	}
 }

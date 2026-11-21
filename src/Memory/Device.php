@@ -23,11 +23,7 @@ final class Device
 
 	public function toArray(): array
 	{
-		return [
-			'id' => $this->id, 'kind' => $this->kind, 'total_bytes' => $this->totalBytes,
-			'available_bytes' => $this->availableBytes, 'unified_with' => $this->unifiedWith,
-			'driver_held_bytes' => $this->driverHeldBytes,
-		];
+		return get_object_vars($this);
 	}
 
 	public static function fromArray(array $a): self

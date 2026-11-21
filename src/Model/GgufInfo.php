@@ -197,19 +197,14 @@ final class GgufInfo
 
 	public function toArray(): array
 	{
-		return [
-			'version'      => $this->version,
-			'tensor_count' => $this->tensorCount,
-			'metadata'     => $this->metadata,
-			'tensors'      => $this->tensors,
-		];
+		return get_object_vars($this);
 	}
 
 	public static function fromArray(array $a): self
 	{
 		return new self(
 			(int)$a['version'],
-			(int)$a['tensor_count'],
+			(int)$a['tensorCount'],
 			(array)$a['metadata'],
 			(array)($a['tensors'] ?? []), // absent in cache entries written before tensor capture
 		);
