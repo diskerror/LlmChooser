@@ -23,11 +23,16 @@ final class GgufReader
 	public const T_INT64   = 11;
 	public const T_FLOAT64 = 12;
 
-	/** Fixed byte sizes of the non-string scalar types. */
-	private const SIZES = [
-		self::T_UINT8 => 1, self::T_INT8 => 1, self::T_UINT16 => 2, self::T_INT16 => 2,
-		self::T_UINT32 => 4, self::T_INT32 => 4, self::T_FLOAT32 => 4, self::T_BOOL => 1,
-		self::T_UINT64 => 8, self::T_INT64 => 8, self::T_FLOAT64 => 8,
+	/**
+	 * unpack() code and byte width of each fixed-size type (all little-endian).
+	 * INT16/INT32 read unsigned and are sign-fixed in scalar(): PHP has no
+	 * little-endian signed code for them ('s'/'l' are machine order).
+	 */
+	private const FORMATS = [
+		self::T_UINT8  => ['C', 1], self::T_INT8    => ['c', 1], self::T_BOOL    => ['C', 1],
+		self::T_UINT16 => ['v', 2], self::T_INT16   => ['v', 2],
+		self::T_UINT32 => ['V', 4], self::T_INT32   => ['V', 4], self::T_FLOAT32 => ['g', 4],
+		self::T_UINT64 => ['P', 8], self::T_INT64   => ['P', 8], self::T_FLOAT64 => ['e', 8],
 	];
 
 	/** Arrays longer than this are skipped (not stored). */
@@ -134,17 +139,12 @@ final class GgufReader
 
 	private function u32(): int
 	{
-		return unpack('V', $this->bytes(4))[1];
-	}
-
-	private function u16(): int
-	{
-		return unpack('v', $this->bytes(2))[1];
+		return $this->scalar(self::T_UINT32);
 	}
 
 	private function u64(): int
 	{
-		return unpack('P', $this->bytes(8))[1];
+		return $this->scalar(self::T_UINT64);
 	}
 
 	private function str(): string
@@ -158,25 +158,22 @@ final class GgufReader
 
 	private function scalar(int $type): mixed
 	{
-		switch ($type) {
-			case self::T_UINT8:   return unpack('C', $this->bytes(1))[1];
-			case self::T_INT8:    return unpack('c', $this->bytes(1))[1];
-			case self::T_UINT16:  return unpack('v', $this->bytes(2))[1];
-			case self::T_INT16:
-				$v = unpack('v', $this->bytes(2))[1];
-				return $v >= 0x8000 ? $v - 0x10000 : $v;
-			case self::T_UINT32:  return unpack('V', $this->bytes(4))[1];
-			case self::T_INT32:
-				$v = unpack('V', $this->bytes(4))[1];
-				return $v >= 0x80000000 ? $v - 0x100000000 : $v;
-			case self::T_FLOAT32: return unpack('g', $this->bytes(4))[1];
-			case self::T_BOOL:    return unpack('C', $this->bytes(1))[1] !== 0;
-			case self::T_STRING:  return $this->str();
-			case self::T_UINT64:  return unpack('P', $this->bytes(8))[1];
-			case self::T_INT64:   return unpack('q', $this->bytes(8))[1];
-			case self::T_FLOAT64: return unpack('e', $this->bytes(8))[1];
+		if ($type === self::T_STRING) {
+			return $this->str();
 		}
-		throw new GgufException("Unknown value type {$type}: {$this->path}");
+		if (!isset(self::FORMATS[$type])) {
+			throw new GgufException("Unknown value type {$type}: {$this->path}");
+		}
+		[$code, $size] = self::FORMATS[$type];
+		$v = unpack($code, $this->bytes($size))[1];
+
+		// 64-bit values need no fix: PHP ints are signed 64-bit already.
+		return match ($type) {
+			self::T_BOOL  => $v !== 0,
+			self::T_INT16 => $v >= 0x8000 ? $v - 0x10000 : $v,
+			self::T_INT32 => $v >= 0x80000000 ? $v - 0x100000000 : $v,
+			default       => $v,
+		};
 	}
 
 	/**
@@ -185,7 +182,7 @@ final class GgufReader
 	private function arrayValue(): ?array
 	{
 		$elem_type = $this->u32();
-		$count    = $this->u64();
+		$count     = $this->u64();
 
 		$storable = $count <= self::MAX_STORED_ARRAY
 			&& $elem_type !== self::T_STRING
@@ -200,8 +197,8 @@ final class GgufReader
 		}
 
 		// Skip.
-		if (isset(self::SIZES[$elem_type])) {
-			$this->skip($count * self::SIZES[$elem_type]);
+		if (isset(self::FORMATS[$elem_type])) {
+			$this->skip($count * self::FORMATS[$elem_type][1]);
 			return null;
 		}
 		for ($i = 0; $i < $count; ++$i) {
