@@ -249,6 +249,31 @@ class ProcessManagerTest extends TestCase
         $this->pm->start('p1');
     }
 
+    public function test_disable_stops_running_instance(): void
+    {
+        $this->pm->start('p1');
+        $this->assertTrue($this->pm->setEnabled('p1', false));
+        $this->assertNull($this->state->get('p1'));
+        $this->assertFalse($this->presets->load('p1')->enabled);
+    }
+
+    public function test_disable_clears_errored_row_without_reporting_running(): void
+    {
+        $this->state->update(static function ($c): void {
+            $c['p1'] = new Instance(['preset_id' => 'p1', 'status' => Instance::ERROR, 'pid' => 0]);
+        });
+        $this->assertFalse($this->pm->setEnabled('p1', false));
+        $this->assertNull($this->state->get('p1'));
+    }
+
+    public function test_enable_starts_nothing(): void
+    {
+        $this->presets->setEnabled('p1', false);
+        $this->assertFalse($this->pm->setEnabled('p1', true));
+        $this->assertTrue($this->presets->load('p1')->enabled);
+        $this->assertNull($this->state->get('p1'));
+    }
+
     /** A ProcessControl with a canned process list that records signals. */
     private function stubProc(array $list, array &$signals): ProcessControl
     {

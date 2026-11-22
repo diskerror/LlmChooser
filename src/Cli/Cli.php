@@ -224,14 +224,9 @@ final class Cli
 	 */
 	private function setEnabled(string $id, bool $enabled): int
 	{
-		if (!$enabled) {
-			$i = $this->app->processes->refresh()[$id] ?? null;
-			if ($i !== null && $i->isLive()) {
-				$this->app->processes->stop($id);
-				$this->out->line("Stopped {$id} (was running)");
-			}
+		if ($this->app->processes->setEnabled($id, $enabled)) {
+			$this->out->line("Stopped {$id} (was running)");
 		}
-		$this->app->presets->setEnabled($id, $enabled);
 		$this->out->line(($enabled ? 'Enabled ' : 'Disabled ') . $id);
 		return 0;
 	}

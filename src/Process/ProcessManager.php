@@ -236,6 +236,27 @@ final class ProcessManager
 		}
 	}
 
+	/**
+	 * Enable or disable a preset. Disabling also stops it and clears any
+	 * leftover state row (an errored instance included).
+	 *
+	 * @return bool True if a live instance was stopped.
+	 */
+	public function setEnabled(string $preset_id, bool $enabled): bool
+	{
+		$was_running = false;
+		if (!$enabled) {
+			$this->reconcile();
+			$i = $this->state->get($preset_id);
+			if ($i !== null) {
+				$was_running = $i->isLive();
+				$this->stop($preset_id);
+			}
+		}
+		$this->presets->setEnabled($preset_id, $enabled);
+		return $was_running;
+	}
+
 	public function stop(string $preset_id): void
 	{
 		$i = $this->state->get($preset_id);

@@ -198,15 +198,7 @@ final class WebApp
 	 */
 	private function setEnabled(string $id, bool $enabled): Response
 	{
-		$stopped = false;
-		if (!$enabled) {
-			$i = $this->app->state->get($id);
-			if ($i !== null && $i->status !== Instance::STOPPED) {
-				$this->app->processes->stop($id);
-				$stopped = true;
-			}
-		}
-		$this->app->presets->setEnabled($id, $enabled);
+		$stopped = $this->app->processes->setEnabled($id, $enabled);
 		$msg = ($enabled ? 'Enabled ' : 'Disabled ') . $id . ($stopped ? ' (was running)' : '');
 		return Response::redirect('/presets', $msg);
 	}
