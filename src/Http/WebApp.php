@@ -312,7 +312,7 @@ final class WebApp
 	private function instanceIsLive(string $id): bool
 	{
 		$i = $this->app->state->get($id);
-		return $i !== null && ($i->status === Instance::LOADING || $i->status === Instance::READY);
+		return $i !== null && $i->isLive();
 	}
 
 	private function presetSave(Request $r, string $id): Response
@@ -1297,7 +1297,7 @@ final class WebApp
 	{
 		$running = 0;
 		foreach ($instances as $i) {
-			if (in_array($i->status, [Instance::LOADING, Instance::READY], true)) {
+			if ($i->isLive()) {
 				$running++;
 			}
 		}

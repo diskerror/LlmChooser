@@ -224,7 +224,7 @@ final class Cli
 	{
 		if (!$enabled) {
 			$i = $this->app->processes->refresh()[$id] ?? null;
-			if ($i !== null && ($i->status === Instance::LOADING || $i->status === Instance::READY)) {
+			if ($i !== null && $i->isLive()) {
 				$this->app->processes->stop($id);
 				$this->out->line("Stopped {$id} (was running)");
 			}

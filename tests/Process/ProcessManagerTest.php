@@ -390,4 +390,22 @@ class ProcessManagerTest extends TestCase
         $this->assertGreaterThan(0, $started->pid);
         $this->assertGreaterThanOrEqual(0.9, $elapsed, 'must wait after eviction before retrying');
     }
+
+    /** @return array<string, array{string, bool}> */
+    public static function isLiveCases(): array
+    {
+        return [
+            'loading' => [Instance::LOADING, true],
+            'ready'   => [Instance::READY, true],
+            'error'   => [Instance::ERROR, false],
+            'stopped' => [Instance::STOPPED, false],
+        ];
+    }
+
+    /** @dataProvider isLiveCases */
+    public function test_isLive(string $status, bool $expected): void
+    {
+        $i = new Instance(['preset_id' => 'p1', 'status' => $status]);
+        $this->assertSame($expected, $i->isLive());
+    }
 }

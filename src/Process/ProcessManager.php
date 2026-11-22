@@ -45,7 +45,7 @@ final class ProcessManager
 		// Already up? Starting twice is a no-op, not an error. An instance in
 		// error state does not count: it gets replaced.
 		$existing = $this->state->get($presetId);
-		if ($existing !== null && in_array($existing->status, [Instance::LOADING, Instance::READY], true)) {
+		if ($existing !== null && $existing->isLive()) {
 			return $existing;
 		}
 
@@ -67,7 +67,7 @@ final class ProcessManager
 		} else {
 			$running = [];
 			foreach ($this->state->all() as $i) {
-				if (in_array($i->status, [Instance::LOADING, Instance::READY], true) && $i->allocation !== []) {
+				if ($i->isLive() && $i->allocation !== []) {
 					$running[] = Allocation::fromArray($i->allocation);
 				}
 			}
@@ -151,7 +151,7 @@ final class ProcessManager
 			} catch (AdmissionException $e) {
 				$victims = [];
 				foreach ($this->state->all() as $i) {
-					if ($i->preset_id !== $presetId && in_array($i->status, [Instance::LOADING, Instance::READY], true)) {
+					if ($i->preset_id !== $presetId && $i->isLive()) {
 						$victims[] = $i;
 					}
 				}
@@ -170,7 +170,7 @@ final class ProcessManager
 	{
 		return $this->state->update(function ($c): void {
 			foreach ($c as $i) {
-				if (!in_array($i->status, [Instance::LOADING, Instance::READY], true)) {
+				if (!$i->isLive()) {
 					continue;
 				}
 				if (!$this->isOurs($i)) {
@@ -277,7 +277,7 @@ final class ProcessManager
 	{
 		return $this->state->update(function ($c): void {
 			foreach ($c as $i) {
-				if (!in_array($i->status, [Instance::LOADING, Instance::READY], true)) {
+				if (!$i->isLive()) {
 					continue;
 				}
 				if (!$this->isOurs($i)) {
@@ -363,7 +363,7 @@ final class ProcessManager
 		$all = $this->refresh();
 		$out = new InstanceCollection();
 		foreach ($all as $id => $i) {
-			if (in_array($i->status, [Instance::LOADING, Instance::READY], true)) {
+			if ($i->isLive()) {
 				$out[$id] = $i;
 			}
 		}

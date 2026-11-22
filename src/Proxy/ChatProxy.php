@@ -69,7 +69,7 @@ final class ChatProxy
 		// A request naming a preset that is not up starts it, unloading the
 		// least-recently-used others if memory is short, then waits for it.
 		$inst = $running[$id] ?? null;
-		if ($named !== null && ($inst === null || !in_array($inst->status, [Instance::LOADING, Instance::READY], true))) {
+		if ($named !== null && ($inst === null || !$inst->isLive())) {
 			try {
 				$this->app->processes->startEvicting($id);
 			} catch (\Throwable $e) {
@@ -143,7 +143,7 @@ final class ChatProxy
 		$presets = $this->app->presets->loadAll();
 		$out = [];
 		foreach ($running as $id => $i) {
-			if ($i->status !== Instance::READY && $i->status !== Instance::LOADING) {
+			if (!$i->isLive()) {
 				continue;
 			}
 			// Defensive: disable stops first, so finding one running is rare.

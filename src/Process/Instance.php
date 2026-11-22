@@ -27,4 +27,9 @@ class Instance extends TypedClass
 	protected string $command     = '';    // Command::toString(), for display
 	protected array  $allocation  = [];    // Allocation::toArray()
 	protected int    $last_used   = 0;     // unix time; updated by the proxy (Phase 7)
+
+	public function isLive(): bool   // status is LOADING or READY (not ERROR, not STOPPED)
+	{
+		return $this->status === self::READY || $this->status === self::LOADING;
+	}
 }
