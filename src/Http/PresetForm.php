@@ -90,7 +90,7 @@ final class PresetForm
 
 		// ---- General (GUI-DESIGN.md §4: enabled first) ----
 		$out .= '<details open><summary>General</summary>';
-		$out .= self::fieldRow('enabled', self::checkbox('enabled', (bool)$p->enabled),
+		$out .= self::fieldRow('enabled', Html::checkbox('enabled', (bool)$p->enabled),
 			(bool)$p->enabled, (bool)$defaults->enabled, $help, self::err($errors, 'enabled'));
 		$out .= self::fieldRow('id', self::textInput('id', $p->id, $help, ['required', 'pattern' => '(?!\.)(?!.*\.\.)[A-Za-z0-9_.-]+(?&lt;!\.)', 'readonly' => !$is_new]),
 			$p->id, $defaults->id, $help, self::err($errors, 'id'));
@@ -260,15 +260,8 @@ final class PresetForm
 	/** @param array<string,array<string,string>> $help */
 	private static function textInput(string $name, string $value, array $help, array $attrs = []): string
 	{
-		$a = '';
-		foreach ($attrs as $k => $v) {
-			if ($v === false) {
-				continue;
-			}
-			$a .= is_int($k) ? ' ' . Html::e($v) : ' ' . Html::e($k) . '="' . Html::e($v) . '"';
-		}
 		return '<input type="text" name="' . Html::e($name) . '" value="' . Html::e($value) . '"'
-			. self::title($help, $name) . $a . '>';
+			. self::title($help, $name) . Html::attrs($attrs) . '>';
 	}
 
 	/** @param array<string,array<string,string>> $help */
@@ -283,13 +276,6 @@ final class PresetForm
 	{
 		return '<textarea name="' . Html::e($name) . '" rows="3" cols="60"'
 			. self::title($help, $name) . '>' . Html::e($value) . '</textarea>';
-	}
-
-	/** hidden-first: an unchecked box then still submits 0. */
-	private static function checkbox(string $name, bool $checked): string
-	{
-		return '<input type="hidden" name="' . Html::e($name) . '" value="0">'
-			. '<input type="checkbox" name="' . Html::e($name) . '" value="1"' . ($checked ? ' checked' : '') . '>';
 	}
 
 	/** Hidden input + button that opens a <dialog> popup listing engine names only (per GUI-DESIGN.md §4 picker). @param array<string,array<string,string>> $help */
@@ -373,9 +359,7 @@ final class PresetForm
 		$title = self::title($help, 'reasoning_effort');
 		$out   = '<select name="' . $n . '"' . $title . '>';
 		$opts  = array_merge(['default'], ChatTemplateFamily::reasoningEfforts($family));
-		foreach ($opts as $opt) {
-			$out .= '<option value="' . Html::e($opt) . '"' . ((string)$value === $opt ? ' selected' : '') . '>' . Html::e($opt) . '</option>';
-		}
+		$out  .= Html::options($opts, (string)$value);
 		if ((string)$value !== '' && !in_array((string)$value, $opts, true)) {
 			$out .= '<option value="' . Html::e($value) . '" selected>' . Html::e($value) . ' (invalid for this model)</option>';
 		}
@@ -389,17 +373,12 @@ final class PresetForm
 		$title = self::title($help, $name);
 
 		if (isset(FieldHints::SELECT[$name])) {
-			$out = '<select name="' . $n . '"' . $title . '>';
-			foreach (FieldHints::SELECT[$name] as $opt) {
-				$out .= '<option value="' . Html::e($opt) . '"' . ((string)$value === $opt ? ' selected' : '') . '>' . Html::e($opt) . '</option>';
-			}
-			return $out . '</select>';
+			return '<select name="' . $n . '"' . $title . '>' . Html::options(FieldHints::SELECT[$name], (string)$value) . '</select>';
 		}
 
 		$type = (new ReflectionProperty(PresetArgs::class, $name))->getType()?->getName() ?? 'string';
 		return match ($type) {
-			'bool'   => '<input type="hidden" name="' . $n . '" value="0">'
-				. '<input type="checkbox" name="' . $n . '" value="1"' . ($value ? ' checked' : '') . $title . '>',
+			'bool'    => Html::checkbox('args[' . $name . ']', (bool)$value, $title),
 			'int'     => '<input type="number" step="1" name="' . $n . '" value="' . Html::e($value) . '"' . $title
 				. (isset(FieldHints::POW2_STEP[$name])
 					? ' min="' . FieldHints::POW2_STEP[$name] . '" data-pow2-step' . ($name === 'ctx_size' ? ' data-max-from="model_path"' : '')

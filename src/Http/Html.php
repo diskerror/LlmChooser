@@ -66,4 +66,39 @@ final class Html
 		return '<form method="post" action="' . self::e($action) . '" class="' . self::e($cls) . '"' . $onsubmit . $attrs . '>'
 			. '<button type="submit" class="' . self::e($class) . '">' . self::e($label) . '</button></form>';
 	}
+
+	/**
+	 * Attribute string for an element: string key => key="value", int key
+	 * => bare attribute (value is its name), false => omitted.
+	 *
+	 * @param array<int|string,string|bool> $attrs
+	 */
+	public static function attrs(array $attrs): string
+	{
+		$a = '';
+		foreach ($attrs as $k => $v) {
+			if ($v === false) {
+				continue;
+			}
+			$a .= is_int($k) ? ' ' . self::e($v) : ' ' . self::e($k) . '="' . self::e($v) . '"';
+		}
+		return $a;
+	}
+
+	/** <option> list with the one equal to $selected marked. @param list<string> $opts */
+	public static function options(array $opts, string $selected): string
+	{
+		$out = '';
+		foreach ($opts as $opt) {
+			$out .= '<option value="' . self::e($opt) . '"' . ($selected === $opt ? ' selected' : '') . '>' . self::e($opt) . '</option>';
+		}
+		return $out;
+	}
+
+	/** Hidden-first checkbox: an unchecked box still submits 0. $extra is appended raw (e.g. a title attribute). */
+	public static function checkbox(string $name, bool $checked, string $extra = ''): string
+	{
+		return '<input type="hidden" name="' . self::e($name) . '" value="0">'
+			. '<input type="checkbox" name="' . self::e($name) . '" value="1"' . ($checked ? ' checked' : '') . $extra . '>';
+	}
 }

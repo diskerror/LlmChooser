@@ -101,13 +101,6 @@ final class EngineForm
 	{
 		$type = (string)($attrs['type'] ?? 'text');
 		unset($attrs['type']);
-		$a = '';
-		foreach ($attrs as $k => $v) {
-			if ($v === false) {
-				continue;
-			}
-			$a .= is_int($k) ? ' ' . Html::e((string)$v) : ' ' . Html::e($k) . '="' . Html::e((string)$v) . '"';
-		}
-		return '<input type="' . Html::e($type) . '" name="' . Html::e($name) . '" value="' . Html::e($value) . '"' . $a . '>';
+		return '<input type="' . Html::e($type) . '" name="' . Html::e($name) . '" value="' . Html::e($value) . '"' . Html::attrs($attrs) . '>';
 	}
 }
