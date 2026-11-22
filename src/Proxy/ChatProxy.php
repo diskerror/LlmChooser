@@ -106,15 +106,22 @@ final class ChatProxy
 		}
 	}
 
-	private function selectPreset(Request $r, InstanceCollection $running): ?string
+	/** The preset name given by query param or header, if either was given. */
+	private function namedByRequest(Request $r): ?string
 	{
 		$q = $r->query('preset');
 		if ($q !== '') {
 			return $q;
 		}
 		$h = $r->header('X-LLMChooser-Preset');
-		if ($h !== null && $h !== '') {
-			return $h;
+		return ($h !== null && $h !== '') ? $h : null;
+	}
+
+	private function selectPreset(Request $r, InstanceCollection $running): ?string
+	{
+		$n = $this->namedByRequest($r);
+		if ($n !== null) {
+			return $n;
 		}
 		$model = $this->bodyModel($r);
 		if ($model !== null) {
@@ -238,15 +245,7 @@ final class ChatProxy
 	/** The preset/model the client explicitly asked for, if any. */
 	private function requestedName(Request $r): ?string
 	{
-		$q = $r->query('preset');
-		if ($q !== '') {
-			return $q;
-		}
-		$h = $r->header('X-LLMChooser-Preset');
-		if ($h !== null && $h !== '') {
-			return $h;
-		}
-		return $this->bodyModel($r);
+		return $this->namedByRequest($r) ?? $this->bodyModel($r);
 	}
 
 	/** The quarantined file matching $name, if the client named a broken preset. */

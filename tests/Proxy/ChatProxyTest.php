@@ -251,6 +251,39 @@ class ChatProxyTest extends TestCase
 		$this->assertStringNotContainsString('x-llmchooser-preset', strtolower($em->json()['body']));
 	}
 
+	public function test_query_beats_header_and_body_model(): void
+	{
+		$a = $this->startReady('a');
+		$this->startReady('b');
+		$em = $this->proxyRun($this->req('POST', '/v1/chat/completions',
+			['preset' => 'a'],
+			['x-llmchooser-preset' => 'b', 'content-type' => 'application/json'],
+			'{"model":"b"}'));
+		$this->assertSame(200, $em->code);
+		$this->assertSame($a->port, $em->json()['port']);
+	}
+
+	public function test_header_beats_body_model(): void
+	{
+		$this->startReady('a');
+		$b = $this->startReady('b');
+		$em = $this->proxyRun($this->req('POST', '/v1/chat/completions', [],
+			['x-llmchooser-preset' => 'b', 'content-type' => 'application/json'],
+			'{"model":"a"}'));
+		$this->assertSame(200, $em->code);
+		$this->assertSame($b->port, $em->json()['port']);
+	}
+
+	public function test_empty_query_falls_through_to_header(): void
+	{
+		$this->startReady('a');
+		$b = $this->startReady('b');
+		$em = $this->proxyRun($this->req('POST', '/v1/chat/completions',
+			['preset' => ''], ['x-llmchooser-preset' => 'b'], '{"model":"zzz"}'));
+		$this->assertSame(200, $em->code);
+		$this->assertSame($b->port, $em->json()['port']);
+	}
+
 	public function test_two_running_unqualified_is_400(): void
 	{
 		$this->startReady('a');
