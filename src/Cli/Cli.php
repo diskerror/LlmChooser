@@ -8,11 +8,16 @@ use LlmChooser\App;
 use LlmChooser\Engine\HelpParser;
 use LlmChooser\Http\FieldHints;
 use LlmChooser\Memory\Allocation;
+use LlmChooser\Model\NgramTable;
 use LlmChooser\Process\AdmissionException;
 use LlmChooser\Process\HealthChecker;
 use LlmChooser\Process\Instance;
 use LlmChooser\Process\ProcessControl;
+use JsonException;
 use Throwable;
+
+use function Diskerror\Library\Json\decode as jsonDecode;
+use function Diskerror\Library\Json\encode as jsonEncode;
 
 /**
  * The command line. run() maps argv to services and returns an exit code;
@@ -287,7 +292,12 @@ final class Cli
 		$src     = isset($pos[0]) ? $this->app->help->forEngine($pos[0]) : ['source' => 'bundled'] + $this->app->help->bundled();
 		$entries = $src['entries'];
 		$index   = HelpParser::aliasIndex($entries);
-		$fields  = json_decode((string)@file_get_contents($this->fieldHelpPath), true);
+		try {
+			$fields = jsonDecode(@file_get_contents($this->fieldHelpPath));
+		}
+		catch (JsonException) {
+			$fields = null;
+		}
 		if (!is_array($fields)) {
 			$this->out->error("Cannot read {$this->fieldHelpPath}");
 			return 1;
@@ -330,7 +340,7 @@ final class Cli
 			foreach ($changed as $name => $h) {
 				$fields[$name]['reviewed'] = $h;
 			}
-			$json = json_encode($fields, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
+			$json = jsonEncode($fields, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
 			if (file_put_contents($this->fieldHelpPath, $json) === false) {
 				$this->out->error("Cannot write {$this->fieldHelpPath}");
 				return 1;
@@ -443,7 +453,8 @@ final class Cli
 		$this->out->line("port: {$i->port}");
 		$this->out->line('started: ' . ($i->started_at > 0 ? date('Y-m-d H:i:s', $i->started_at) : '-'));
 		$this->out->line('uptime: ' . ($i->started_at > 0 ? Format::duration(time() - $i->started_at) : '-'));
-		$this->out->line('estimate: ' . ($alloc === null ? '-' : Format::humanBytes($alloc->totalBytes())) . ($break === [] ? '' : ' (' . implode(', ', $break) . ')'));
+		$this->out->line('estimate: ' . ($alloc === null ? '-' : Format::humanBytes($alloc->totalBytes())
+			. (NgramTable::forPath($this->modelPathOf($id))?->estimateSuffix(Format::humanBytes(...)) ?? '')) . ($break === [] ? '' : ' (' . implode(', ', $break) . ')'));
 		$this->out->line('rss: ' . Format::humanBytes((new ProcessControl())->rssBytes($i->pid)));
 		$this->out->line("health: {$state}" . ($body !== '' ? ' ' . $body : ''));
 		$this->out->line("command: {$i->command}");
@@ -453,6 +464,16 @@ final class Cli
 		$this->out->line(Format::tail($i->log_file, $lines));
 
 		return 0;
+	}
+
+	/** The preset's model path, or "" if the preset can't be loaded. */
+	private function modelPathOf(string $id): string
+	{
+		try {
+			return $this->app->presets->load($id)->model_path;
+		} catch (Throwable) {
+			return '';
+		}
 	}
 
 	private function listPresets(bool $onlyEnabled = false): int
@@ -480,21 +501,29 @@ final class Cli
 
 	private function models(): int
 	{
-		$rows = [];
+		$rows  = [];
+		$notes = [];
 		foreach ($this->app->modelScanner()->scan() as $e) {
+			$ngrams = $e->ngrams();
+			if ($ngrams !== null) {
+				$notes[$ngrams->note()] = true;
+			}
 			$note = $e->error ?? '';
 			if ($note === '' && $e->isSharded()) {
 				$note = count($e->shardPaths) . ' shards';
 			}
 			$rows[] = [
 				$e->displayName,
-				Format::humanBytes($e->sizeBytes),
+				Format::humanBytes($e->sizeBytes) . ($ngrams?->sizeSuffix(Format::humanBytes(...)) ?? ''),
 				$e->info?->architecture() ?? '-',
 				(string)($e->info?->contextLength() ?? '-'),
 				$note,
 			];
 		}
 		$this->out->table(['MODEL', 'SIZE', 'ARCH', 'CTX', 'NOTE'], $rows);
+		foreach (array_keys($notes) as $n) {
+			$this->out->line($n);
+		}
 		return 0;
 	}
 

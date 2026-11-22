@@ -6,6 +6,9 @@ namespace LlmChooser\Process;
 
 use RuntimeException;
 
+use function Diskerror\Library\Json\decode as jsonDecode;
+use function Diskerror\Library\Json\encode as jsonEncode;
+
 /**
  * storage/runtime_state.json — { "<preset_id>": Instance, ... }
  * All changes go through update(), which holds an exclusive file lock so the
@@ -44,7 +47,7 @@ final class RuntimeState
 			flock($fh, LOCK_EX);
 			$all = $this->decode(stream_get_contents($fh));
 			$fn($all);
-			$json = json_encode($all, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
+			$json = jsonEncode($all);
 			ftruncate($fh, 0);
 			rewind($fh);
 			fwrite($fh, $json);
@@ -77,7 +80,7 @@ final class RuntimeState
 		if ($json === false || trim($json) === '') {
 			return $out;
 		}
-		$data = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+		$data = jsonDecode($json);
 		foreach ($data as $id => $row) {
 			$out[$id] = new Instance($row);
 		}

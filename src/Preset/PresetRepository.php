@@ -8,6 +8,8 @@ use LlmChooser\Config\BrokenFile;
 use LlmChooser\Config\JsonStore;
 use RuntimeException;
 
+use function Diskerror\Library\Json\encode as jsonEncode;
+
 class PresetRepository
 {
     use JsonStore;
@@ -35,7 +37,7 @@ class PresetRepository
         if ($preset->id === '') {
             throw new RuntimeException('Preset must have a non-empty id before saving.');
         }
-        $json = json_encode($preset, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
+        $json = jsonEncode($preset);
         $this->writeJsonIfChanged($this->pathFor($preset->id), $json);
     }
 

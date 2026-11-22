@@ -1,0 +1,27 @@
+# Option A: LlmChooser served by PHP's built-in server.
+# Copy to /etc/systemd/system/llmchooser.service, adjust User/paths/port, then:
+#   sudo systemctl daemon-reload && sudo systemctl enable --now llmchooser
+[Unit]
+Description=LlmChooser web UI and /v1 proxy (php -S)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=llama
+Group=llama
+WorkingDirectory=/opt/llmchooser
+# One worker per simultaneous request. Each streaming chat holds one for its
+# whole length; the dashboard and other requests need a few more.
+Environment=PHP_CLI_SERVER_WORKERS=8
+ExecStart=/usr/bin/php -S 0.0.0.0:1234 -t public public/index.php
+Restart=on-failure
+RestartSec=5
+# Models started from the web UI inherit this; llama.cpp may pin memory.
+LimitMEMLOCK=infinity
+# Restarting this service must NOT stop running models (they are started in
+# their own session but stay in this unit's cgroup).
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target

@@ -117,6 +117,8 @@ class WebAppTest extends TestCase
 		// Phase 11: stopped presets show under Available, not as 'stopped' rows.
 		$this->assertStringContainsString('Available', $res->body);
 		$this->assertStringContainsString('Nothing loaded.', $res->body);
+		// ctx_size 0 shows the model's trained context (fixture: 8192), not "model max".
+		$this->assertStringContainsString('<span title="model max">8192</span>', $res->body);
 	}
 
 	public function testPresetListLinks(): void

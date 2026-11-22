@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace LlmChooser\Proxy;
 
+use Diskerror\Library\Curl;
+use Diskerror\Library\Exceptions\RuntimeException;
 use LlmChooser\Http\Request;
 
 /** Forwards one request to http://host:port and streams the answer to an Emitter. */
@@ -28,8 +30,7 @@ final class Upstream
 		$headers[] = 'Expect:';   // disable curl's 100-continue
 
 		$started = false;
-		$ch      = curl_init("http://{$host}:{$port}{$pathAndQuery}");
-		curl_setopt_array($ch, [
+		$opts    = [
 			CURLOPT_CUSTOMREQUEST  => $r->method,
 			CURLOPT_HTTPHEADER     => $headers,
 			CURLOPT_CONNECTTIMEOUT => 5,
@@ -55,12 +56,16 @@ final class Upstream
 				$out->write($data);
 				return strlen($data);
 			},
-		]);
+		];
 		if (!in_array($r->method, ['GET', 'HEAD'], true)) {
-			curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+			$opts[CURLOPT_POSTFIELDS] = $body;
 		}
-		$ok  = curl_exec($ch) !== false;
-		$err = $ok ? '' : curl_error($ch);
-		return [$ok, $err];
+		try {
+			(new Curl("http://{$host}:{$port}{$pathAndQuery}", $opts))->exec();
+		}
+		catch (RuntimeException $e) {
+			return [false, $e->getMessage()];
+		}
+		return [true, ''];
 	}
 }

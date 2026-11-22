@@ -8,6 +8,8 @@ use LlmChooser\Config\BrokenFile;
 use LlmChooser\Config\JsonStore;
 use RuntimeException;
 
+use function Diskerror\Library\Json\encode as jsonEncode;
+
 class EngineRepository
 {
     use JsonStore;
@@ -35,7 +37,7 @@ class EngineRepository
         if ($engine->id === '') {
             throw new RuntimeException('Engine must have a non-empty id before saving.');
         }
-        $json = json_encode($engine, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
+        $json = jsonEncode($engine);
         $this->writeJsonIfChanged($this->pathFor($engine->id), $json);
     }
 

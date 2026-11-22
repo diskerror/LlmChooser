@@ -26,6 +26,12 @@ final class ModelEntry
 		public readonly ?string $error,
 	) {}
 
+	/** The model's lazily loaded n-gram table, or null if it has none. */
+	public function ngrams(): ?NgramTable
+	{
+		return NgramTable::of($this->path, $this->info);
+	}
+
 	public function isSharded(): bool
 	{
 		return count($this->shardPaths) > 1;

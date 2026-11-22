@@ -219,3 +219,59 @@ document.querySelectorAll('input[data-binary-check]').forEach(input => {
   input.addEventListener('change', check);
   if (input.value.trim() !== '') check();
 });
+
+// Size fields (FieldHints::POW2_STEP): the spinner arrows and Up/Down keys
+// step through 1, 2, 3, 4, 6, 8, 12, 16, ... 1024, 1536, 2048, 3072, ...
+// (2^k and 2^k + 2^(k-1)), clamped to min and to the max. ctx_size's max is
+// the selected model's trained context (data-ctx on its <option>).
+// Typed values are left alone.
+document.querySelectorAll('input[data-pow2-step]').forEach(input => {
+  const form = input.form;
+  const maxOf = () => {
+    if (input.dataset.maxFrom) {
+      const sel = form && form.elements[input.dataset.maxFrom];
+      const opt = sel && sel.selectedOptions && sel.selectedOptions[0];
+      const ctx = opt ? parseInt(opt.dataset.ctx || '', 10) : NaN;
+      if (ctx > 0) return ctx;
+    }
+    return input.max !== '' ? parseInt(input.max, 10) : 2 ** 31;
+  };
+  const step = (v, up) => {
+    const min = input.min !== '' ? parseInt(input.min, 10) : 0;
+    const max = maxOf();
+    const seq = [];
+    for (let p = 1; p <= max; p *= 2) {
+      seq.push(p);
+      if (p * 1.5 <= max && p >= 2) seq.push(p * 1.5);
+    }
+    seq.sort((a, b) => a - b);
+    if (seq[seq.length - 1] !== max) seq.push(max);
+    if (up) {
+      const n = seq.find(x => x > v && x >= min);
+      return n === undefined ? Math.min(Math.max(v, min), max) : n;
+    }
+    const lower = seq.filter(x => x < v && x >= min);
+    return lower.length ? lower[lower.length - 1] : min;
+  };
+  let last = parseInt(input.value, 10) || 0;
+  const set = v => {
+    input.value = v;
+    last = v;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  input.addEventListener('keydown', e => {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    e.preventDefault();
+    set(step(parseInt(input.value, 10) || 0, e.key === 'ArrowUp'));
+  });
+  // Spinner clicks arrive as an input event moving the value by exactly 1.
+  input.addEventListener('input', () => {
+    const v = parseInt(input.value, 10);
+    if (Number.isNaN(v)) return;
+    if (Math.abs(v - last) === 1) {
+      set(step(last, v > last));
+    } else {
+      last = v;
+    }
+  });
+});

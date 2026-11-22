@@ -21,7 +21,7 @@ Run CLI commands as the llama user so file ownership stays consistent:
 
     sudo -u llama php /opt/llmchooser/bin/llmchooser health
 
-`bin/llmchooser` is `#!/usr/bin/env php`; if `php` on your `PATH` is 8.4+, it
+`bin/llmchooser` is `#!/usr/bin/env php`; if `php` on your `PATH` is 8.1+, it
 can be run directly. It refuses to start under PHP < 8.1.
 
 Engine binary: storage/engines/llama-ngram.json points at
@@ -51,33 +51,11 @@ model load shows up there, not in the CLI's one-line summary.
 
 ## Web app + proxy service
 
+See the README's Option A: [`deploy/llmchooser.service`](../deploy/llmchooser.service)
+→ `/etc/systemd/system/llmchooser.service`, or `sudo ./install.sh`.
 Streaming requests hold a PHP worker for their whole duration, so give
-the built-in server enough workers for the concurrent chats you expect.
-
-`/etc/systemd/system/llmchooser-web.service`
-
-    [Unit]
-    Description=LlmChooser web UI and /v1 proxy
-    After=network-online.target
-    Wants=network-online.target
-
-    [Service]
-    Type=simple
-    User=llama
-    Group=llama
-    WorkingDirectory=/opt/llmchooser
-    Environment=PHP_CLI_SERVER_WORKERS=8
-    ExecStart=/usr/bin/php -S 0.0.0.0:8090 -t public public/index.php
-    Restart=on-failure
-    RestartSec=5
-    # Instances are started in their own session (setsid); KillMode=process
-    # makes sure restarting this service does NOT stop running models.
-    KillMode=process
-
-    [Install]
-    WantedBy=multi-user.target
-
-Enable: `sudo systemctl daemon-reload && sudo systemctl enable --now llmchooser-web`
+the built-in server enough workers (`PHP_CLI_SERVER_WORKERS`) for the
+concurrent chats you expect.
 
 Later, nginx + php-fpm can replace `php -S` without code changes
 (set `fastcgi_buffering off` for `/v1/` so streaming is not buffered).

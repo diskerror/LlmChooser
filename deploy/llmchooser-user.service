@@ -1,0 +1,23 @@
+# Option A as a per-user service (no sudo), e.g. for an install in your home
+# directory. Copy to ~/.config/systemd/user/llmchooser.service, adjust the
+# path/port, then:
+#   systemctl --user daemon-reload && systemctl --user enable --now llmchooser
+#   loginctl enable-linger      # keep it running after logout, start at boot
+[Unit]
+Description=LlmChooser web UI and /v1 proxy (php -S, per user)
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/llmchooser
+# One worker per simultaneous request; a streaming chat holds one throughout.
+Environment=PHP_CLI_SERVER_WORKERS=8
+ExecStart=/usr/bin/php -S 0.0.0.0:1234 -t public public/index.php
+Restart=on-failure
+RestartSec=5
+# Restarting this service must NOT stop running models.
+KillMode=process
+# No LimitMEMLOCK here: a user service cannot raise it above the user's own
+# limit (see /etc/security/limits.conf if llama.cpp needs more).
+
+[Install]
+WantedBy=default.target

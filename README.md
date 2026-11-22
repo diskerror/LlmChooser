@@ -39,185 +39,181 @@ and see what it costs in memory before you load it.
 - A live estimate of the memory a preset needs, updated as you edit its
   settings.
 - A web-based GUI.
-- Served by PHP or any HTTP server that can talk to PHP. Tested with nginx and
-  php8.4-fpm, and with PHP's built-in server (see below).
-- Written and tested with PHP 8.4 (the test suite also passes on 8.1–8.5).
+- Runs on PHP's built-in server (no web server needed), or behind nginx +
+  php-fpm.
+- PHP 8.1 or newer. Unit tests are run on PHP 8.1 through 8.5; the developer
+  uses it daily on Debian 13 with PHP 8.4.
 
 You also need a built `llama-server` (llama.cpp) on the machine that will run
 the models.
 
 ## Installing (Debian / Ubuntu)
 
-LlmChooser is a single front-controller PHP app (`public/index.php`). This
-covers two ways to run it on a home LAN:
+Requirements, all from the distribution's own packages (no extra package
+sources needed):
+- PHP 8.1 or newer, CLI, with the `curl` and `intl` extensions (the
+  distribution's default PHP is fine: Debian 13 ships 8.4, Ubuntu 26.04
+  ships 8.5).
+  `pcntl` and `posix` come with `php-cli`.
+- Composer, to install the PHP dependencies.
+- A built `llama-server` (llama.cpp).
+- Option B only: nginx and php-fpm.
 
-- **nginx + php-fpm** — recommended, survives reboots/crashes, real concurrency.
-- **`php -S`** — quick/dev-only, see [Limitations](#php--s-limitations) below.
+Two ways to serve it:
+- **Option A — PHP's built-in server.** One systemd service, no web server.
+  Suited to a home lab: a handful of users, for example a family each using
+  their own model, or several sharing one, including streaming chats from
+  agents (main chat, summarizer and embedder at once).
+- **Option B — nginx + php-fpm**, if you already run nginx.
 
-Build/toolchain requirements:
-- PHP **8.4** recommended (it is what Debian 13 ships); tested on 8.1–8.5.
-  `composer.json` requires >= 8.1. Install `php-fpm`, `php-cli` and the
-  extensions your `composer.json` deps need (check `diskerror/typed` for anything beyond
-  core — it has no extra extension requirements as of this writing).
-- Composer, to install vendor deps (not vendored in the repo).
+Neither has authentication or TLS; keep it on a trusted LAN (or put a reverse
+proxy with TLS/auth in front).
 
-## 1. Common setup (both methods)
+## 1. Common setup
 
 ```bash
-sudo apt update
-sudo apt install -y php8.4-cli php8.4-fpm curl unzip git
-
-# Composer (if not already installed)
-curl -sS https://getcomposer.org/installer | php
-sudo mv composer.phar /usr/local/bin/composer
-
-# Get the code
-sudo git clone <your-repo-url> /opt/llmchooser
+sudo apt install php-cli php-curl php-intl composer git
+sudo git clone https://github.com/diskerror/LlmChooser.git /opt/llmchooser
+sudo chown -R "$USER" /opt/llmchooser
 cd /opt/llmchooser
 composer install --no-dev --optimize-autoloader
-
-# Writable storage dir (presets, runtime state)
-sudo chown -R www-data:www-data storage/
-
-# A writable cache dir in the web user's home, for the GPU's shader cache
-# (see the note below). The home directory itself stays root-owned.
-sudo install -d -o www-data -g www-data "$(getent passwd www-data | cut -d: -f6)/.cache"
 ```
 
-> **Why the cache directory?** The inference engines LlmChooser starts run as
-> the web user (`www-data`). Vulkan (Mesa) keeps compiled shaders under
-> `$HOME/.cache`, and `www-data`'s home is `/var/www`, which is root-owned. Without
-> that directory every start logs `Failed to create /var/www/.cache for shader
-> cache (Permission denied)---disabling.` and runs without the shader cache.
+> Composer fetches both libraries: `diskerror/typed` from Packagist and
+> `diskerror/p_lib` from GitHub (it is not on Packagist), so `git` must be
+> installed.
+>
+> Working on p_lib too? Clone it next to LlmChooser, save a copy of
+> `composer.json` as `composer.local.json` with a `path` repository for
+> `../p_lib` (git ignores it), and install with
+> `COMPOSER=composer.local.json composer install`. Composer then symlinks
+> your checkout into `vendor/`.
 
-> `diskerror/typed` is pulled as a local path repo in `composer.json`
-> (`../Typed`). On a deploy box, either vendor a real version-pinned
-> release of `diskerror/typed` via Packagist/VCS, or clone it as a sibling
-> directory to `LlmChooser` before `composer install`. Don't commit your
-> local absolute paths into `composer.json` — keep machine-specific paths
-> out of version control.
-
-Check Ubuntu's default PHP version first — Ubuntu 24.04 ships PHP 8.3, which
-works, but not the recommended 8.4. To get 8.4, use the `ppa:ondrej/php` PPA:
+LlmChooser runs as any user and from any directory, including your home
+directory. Then either run the installer:
 
 ```bash
-sudo add-apt-repository ppa:ondrej/php
-sudo apt update
-sudo apt install -y php8.4-fpm php8.4-cli
+sudo ./install.sh                  # Option A as a system service, user "llama"
+./install.sh --mode user           # Option A as your own user service, no sudo
+sudo ./install.sh --mode nginx     # Option B
+./install.sh --help                # --user, --port, --workers, --dry-run
 ```
 
-## 2. Option A — nginx + php-fpm (recommended)
+or copy the files from `deploy/` by hand as below.
+
+The installer checks requirements (and prints the `apt install` line for
+anything missing; it never installs packages), creates the service user if
+needed and adds it to `video` and `render` for GPU access, gives it
+`storage/` and a `~/.cache` (for the GPU shader cache), and installs the
+service files with your settings.
+
+`storage/` holds presets, runtime state and the model logs (which can include
+prompts), so it is private to the service user: directories `750`, files
+`640`. The installer sets this, and LlmChooser creates new files the same way
+(umask `027`). By hand:
 
 ```bash
-sudo apt install -y nginx-light
+sudo chown -R llama: storage
+find storage -type d -exec chmod 750 {} + ; find storage -type f -exec chmod 640 {} +
 ```
 
-**php-fpm pool** — edit `/etc/php/8.4/fpm/pool.d/www.conf` (or a dedicated
-pool file), key settings for a single-user LAN tool:
+Run CLI commands as the service user (`sudo -u llama php bin/llmchooser …`),
+not as root, or files they create in `storage/` will belong to root. It does not overwrite an existing file that
+differs: it writes the new one next to it as `*.new`.
 
-```ini
-pm = ondemand
-pm.max_children = 5
-```
+Models are started as the service user, so it needs read access to your
+model directories and to the `llama-server` binary.
 
-**nginx site** — `/etc/nginx/sites-available/llmchooser`:
+## 2. Option A — PHP's built-in server
 
-```nginx
-server {
-    listen 1234;
-    server_name _;
-
-    root /opt/llmchooser/public;
-    index index.php;
-
-    client_max_body_size 20m;
-
-    location / {
-        try_files $uri $uri/ /index.php?$query_string;
-    }
-
-    location ~ \.php$ {
-        include fastcgi_params;
-        fastcgi_pass unix:/run/php/php8.4-fpm.sock;
-        fastcgi_index index.php;
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-        # /v1/* is a streaming proxy to a local LLM server — don't let
-        # nginx or fpm time it out on long generations.
-        fastcgi_read_timeout 3600s;
-    }
-
-    location ~ ^/v1/ {
-        include fastcgi_params;
-        fastcgi_pass unix:/run/php/php8.4-fpm.sock;
-        fastcgi_param SCRIPT_FILENAME $document_root/index.php;
-        fastcgi_read_timeout 3600s;
-        proxy_buffering off;
-    }
-}
-```
-
-```bash
-sudo ln -s /etc/nginx/sites-available/llmchooser /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
-sudo systemctl enable --now php8.4-fpm nginx
-```
-
-Visit `http://<host-ip>:1234`. Both services auto-restart on crash and
-auto-start on boot via systemd — no further supervision needed.
-
-## 3. Option B — `php -S` (quick/dev only)
-
-```bash
-cd /opt/llmchooser
-php -S 0.0.0.0:1234 -t public public/index.php
-```
-
-Run it under a user unit so it survives logout/reboot:
-
-`/etc/systemd/system/llmchooser-dev.service`:
+[`deploy/llmchooser.service`](deploy/llmchooser.service) →
+`/etc/systemd/system/llmchooser.service`:
 
 ```ini
 [Unit]
-Description=LlmChooser (php -S dev server)
-After=network.target
+Description=LlmChooser web UI and /v1 proxy (php -S)
+After=network-online.target
+Wants=network-online.target
 
 [Service]
-User=www-data
+Type=simple
+User=llama
+Group=llama
 WorkingDirectory=/opt/llmchooser
+Environment=PHP_CLI_SERVER_WORKERS=8
 ExecStart=/usr/bin/php -S 0.0.0.0:1234 -t public public/index.php
 Restart=on-failure
+RestartSec=5
+LimitMEMLOCK=infinity
+KillMode=process
 
 [Install]
 WantedBy=multi-user.target
 ```
 
 ```bash
-sudo systemctl enable --now llmchooser-dev
+sudo systemctl daemon-reload && sudo systemctl enable --now llmchooser
 ```
 
-### `php -S` limitations
+- **Workers.** `PHP_CLI_SERVER_WORKERS` is the number of requests served at
+  once. A streaming chat holds a worker for its whole length; the dashboard
+  needs one or two more. Without it, PHP's built-in server handles one
+  request at a time. Measured with 8 workers: 6 simultaneous 3-second streams
+  finished in 3.3 s while the dashboard still answered in 55 ms; with 1
+  worker, 3 streams took 9 s and the dashboard waited for them. A request
+  beyond the worker count waits for a free one. Linux and macOS only.
+- **`KillMode=process`** keeps running models alive when you restart
+  LlmChooser.
+- Logs: `journalctl -u llmchooser`.
 
-- **No auth, no TLS.** Anyone on the LAN (or anything that reaches that
-  port — other VLANs, a compromised IoT device) gets full plaintext access.
-- **Single-threaded.** One request at a time; a long `/v1/*` chat-proxy
-  stream will block every other request/tab until it finishes.
-- **No `.htaccess`-equivalent deny rules.** Routing relies entirely on the
-  `cli-server` check in `index.php` — fine here since it only passes
-  through existing static files, but there's no independent safety net.
-- **Minimal logging**, no rotation — stdout only, lost if the service log
-  isn't captured (journald captures it under systemd, which is why the
-  unit file above is worth using even for "quick" mode).
-- Even with the systemd unit for auto-restart/auto-start, it's still
-  single-threaded and unencrypted — treat Option B as "good enough for me,
-  alone, on my own LAN," not as a stepping stone to anything multi-user or
-  internet-facing.
+**Per-user service (home directory, no sudo).**
+[`deploy/llmchooser-user.service`](deploy/llmchooser-user.service) →
+`~/.config/systemd/user/llmchooser.service` (set `WorkingDirectory` to your
+copy), or `./install.sh --mode user`:
+
+```bash
+systemctl --user daemon-reload && systemctl --user enable --now llmchooser
+loginctl enable-linger      # keep running after logout; start at boot
+```
+
+Your user needs to be in `video` and `render` for GPU access
+(`sudo usermod -aG video,render $USER`, then log in again). Logs:
+`journalctl --user -u llmchooser`.
+
+## 3. Option B — nginx + php-fpm
+
+```bash
+sudo apt install nginx-light php-fpm
+```
+
+Copy, adjusting user, paths, port and PHP version (or use
+`install.sh --mode nginx`):
+- [`deploy/php-fpm-llmchooser.conf`](deploy/php-fpm-llmchooser.conf) →
+  `/etc/php/8.4/fpm/pool.d/llmchooser.conf` — a pool running as the service
+  user; `pm.max_children` plays the role of the worker count.
+- [`deploy/php-fpm-killmode.conf`](deploy/php-fpm-killmode.conf) →
+  `/etc/systemd/system/php8.4-fpm.service.d/llmchooser.conf` — otherwise
+  restarting php-fpm stops every model started from the web UI.
+- [`deploy/nginx-llmchooser.conf`](deploy/nginx-llmchooser.conf) →
+  `/etc/nginx/sites-available/llmchooser` — unbuffered, with a 1-hour read
+  timeout for long streamed answers.
+
+nginx runs as `www-data` and serves `public/` directly, so it must be able
+to read it: an install in a private home directory needs Option A.
+
+```bash
+sudo ln -s /etc/nginx/sites-available/llmchooser /etc/nginx/sites-enabled/
+sudo systemctl daemon-reload && sudo systemctl restart php8.4-fpm
+sudo nginx -t && sudo systemctl reload nginx
+```
 
 ## 4. Verify
 
 ```bash
-curl -s http://localhost:1234/ | head -20
+curl -s http://localhost:1234/ | head -5
+sudo -u llama php /opt/llmchooser/bin/llmchooser health
 ```
 
-Should return the LlmChooser HTML page. Check `storage/runtime_state.json`
-is writable and `journalctl -u php8.4-fpm` / `-u nginx` / `-u llmchooser-dev`
-for errors.
+The first should print the start of the dashboard's HTML. On errors, check
+`journalctl -u llmchooser` (Option A) or `-u php8.4-fpm` / `-u nginx`
+(Option B).

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace LlmChooser\Http;
 
+use Diskerror\Library\Curl;
+use Diskerror\Library\Exceptions\RuntimeException;
 use LlmChooser\App;
 use LlmChooser\Cli\Format;
 use LlmChooser\Engine\BinaryCheck;
@@ -11,6 +13,7 @@ use LlmChooser\Engine\Engine;
 use LlmChooser\Memory\Allocation;
 use LlmChooser\Memory\MemoryEstimator;
 use LlmChooser\Model\GgufInfo;
+use LlmChooser\Model\NgramTable;
 use LlmChooser\Model\ModelEntry;
 use LlmChooser\Process\AdmissionException;
 use LlmChooser\Process\ActivityProbe;
@@ -439,8 +442,11 @@ final class WebApp
 		foreach ($alloc->perDevice as $d => $b) {
 			$devs .= '<tr><td>' . Html::e($d) . '</td><td>' . Html::e(Format::humanBytes($b)) . '</td></tr>';
 		}
+		$ngrams = NgramTable::forPath($preset->model_path);
 		$body = '<table><tr><th>Part</th><th>Bytes</th></tr>' . $rows
-			. '<tr><th>Total</th><th>' . Html::e(Format::humanBytes($alloc->totalBytes())) . '</th></tr></table>'
+			. '<tr><th>Total</th><th>' . Html::e(Format::humanBytes($alloc->totalBytes())
+				. ($ngrams?->estimateSuffix(Format::humanBytes(...)) ?? '')) . '</th></tr></table>'
+			. ($ngrams !== null ? '<p class="note">' . Html::e(ltrim($ngrams->note(), '*+ ')) . '</p>' : '')
 			. '<h2>Per device</h2><table><tr><th>Device</th><th>Bytes</th></tr>' . $devs . '</table>';
 		return Response::html(Html::page('Estimate ' . $id, $body, '', '', $r->path, $this->headerSummary($this->app->state->all())));
 	}
@@ -462,8 +468,13 @@ final class WebApp
 	{
 		$usedBy = $this->usedByMap();
 		$rows   = '';
+		$notes  = [];
 		foreach ($this->app->modelScanner()->scan() as $e) {
-			$info = $e->info;
+			$info   = $e->info;
+			$ngrams = $e->ngrams();
+			if ($ngrams !== null) {
+				$notes[$ngrams->note()] = true;
+			}
 			$rows .= '<tbody class="model-block">';
 			$rows .= '<tr class="model-row"' . ($info !== null ? ' data-sort-ctx="' . $info->contextLength() . '"' : '') . '><td>'
 				. $this->modelNameCell($e)
@@ -472,7 +483,8 @@ final class WebApp
 			$rows .= '<td>' . Html::e($info?->architecture() ?? '-') . '</td>';
 			$rows .= '<td data-sort="' . $this->paramSortValue($e) . '">' . Html::e($this->paramCell($e)) . '</td>';
 			$rows .= '<td>' . Html::e($info !== null ? $info->fileTypeName() : '-') . '</td>';
-			$rows .= '<td data-sort="' . $e->sizeBytes . '">' . Html::e(Format::gbNumber($e->sizeBytes)) . '</td>';
+			$rows .= '<td data-sort="' . $e->sizeBytes . '">' . Html::e(Format::gbNumber($e->sizeBytes)
+				. ($ngrams?->sizeSuffix(Format::gbNumber(...)) ?? '')) . '</td>';
 			$rows .= '<td data-sort="' . ($info?->contextLength() ?? 0) . '">'
 				. Html::e((string)($info?->contextLength() ?? '-'))
 				. ($info !== null && $info->hasRopeScaling() ? ' ★' : '')
@@ -500,7 +512,8 @@ final class WebApp
 			. $th('Extras', false) . $th('Has preset', false)
 			. '</tr></thead>'
 			. ($rows !== '' ? $rows : '<tbody><tr><td colspan="11">No models found.</td></tr></tbody>')
-			. '</table>';
+			. '</table>'
+			. implode('', array_map(static fn(string $n): string => '<p class="note">' . Html::e($n) . '</p>', array_keys($notes)));
 		return Response::html(Html::page('Models', $body, $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all())));
 	}
 
@@ -792,9 +805,17 @@ final class WebApp
 		$ctx   = $info->contextLength();
 		$total = $e->sizeBytes + (int)ceil($per['f16'] * $ctx / 1000) + \LlmChooser\Memory\MemoryEstimator::OVERHEAD_FIXED_BYTES;
 		$out .= '<tr><th>Total at ' . Html::e((string)$ctx) . ' ctx (f16 KV)</th><td>'
-			. Html::e(Format::humanBytes($total)) . ' — ' . Html::e(Format::humanBytes($e->sizeBytes)) . ' weights'
+			. Html::e(Format::humanBytes($total) . ($e->ngrams()?->estimateSuffix(Format::humanBytes(...)) ?? ''))
+			. ' — ' . Html::e(Format::humanBytes($e->sizeBytes)) . ' weights'
 			. $this->freeMemoryNote($total)
 			. '</td></tr>';
+		$ngrams = $e->ngrams();
+		if ($ngrams !== null) {
+			$out .= '<tr><th>N-gram table</th><td>'
+				. Html::e(($ngrams->embedded ? 'in the model file' : ($ngrams->filePath ?? '') . ($ngrams->fileBytes !== null ? ' — ' . Format::humanBytes($ngrams->fileBytes) : ' — missing'))
+					. '. ' . ltrim($ngrams->note(), '*+ '))
+				. '</td></tr>';
+		}
 
 		$out .= '<tr><th>Chat template</th><td>'
 			. ($info->hasChatTemplate() ? 'yes — ' . Html::e($info->chatTemplateFirstLine()) : 'no')
@@ -964,8 +985,7 @@ final class WebApp
 		$begin     = microtime(true);
 		$firstByte = null;
 		$response  = '';
-		$ch        = curl_init("http://{$i->host}:{$i->port}/v1/chat/completions");
-		curl_setopt_array($ch, [
+		$curl      = new Curl("http://{$i->host}:{$i->port}/v1/chat/completions", [
 			CURLOPT_POST           => true,
 			CURLOPT_POSTFIELDS     => $body,
 			CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
@@ -982,14 +1002,16 @@ final class WebApp
 				return strlen($data);
 			},
 		]);
-		$ok   = curl_exec($ch);
-		$code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-		$err  = curl_error($ch);
-		$end = microtime(true);
-
-		if ($ok === false) {
+		try {
+			$curl->exec();
+		}
+		catch (RuntimeException $e) {
+			$err = $e->getMessage();
 			return Response::json(['ok' => false, 'error' => 'upstream failed: ' . ($err !== '' ? $err : 'no response')]);
 		}
+		$code = (int)$curl->getinfo(CURLINFO_RESPONSE_CODE);
+		$end  = microtime(true);
+
 		if ($code < 200 || $code >= 300) {
 			$detail = trim(preg_replace('/\s+/', ' ', $response) ?? '');
 			return Response::json(['ok' => false, 'error' => 'HTTP ' . $code . ($detail !== '' ? ': ' . substr($detail, 0, 200) : '')]);
@@ -1056,7 +1078,8 @@ final class WebApp
 				. '<td>' . $this->statusCell($i) . '</td>'
 				. '<td class="num">' . Html::e((string)($i->port ?: '-')) . '</td>'
 				. '<td class="num">' . $this->ctxCell($p) . '</td>'
-				. '<td class="num">' . ($alloc !== null ? Html::e(Format::gb($alloc->totalBytes())) : '-') . '</td>'
+				. '<td class="num">' . ($alloc !== null ? Html::e(Format::gb($alloc->totalBytes())
+					. ($p !== null ? NgramTable::forPath($p->model_path)?->estimateSuffix(Format::gb(...)) ?? '' : '')) : '-') . '</td>'
 				. '<td>' . ($i->started_at > 0 ? Html::e(Format::duration(time() - $i->started_at)) : '-') . '</td>'
 				. '<td>' . ($i->last_used > 0 ? Html::e(Format::duration(time() - $i->last_used)) . ' ago' : '-') . '</td>'
 				. '<td class="actions">' . $acts . '</td></tr>';
@@ -1101,7 +1124,8 @@ final class WebApp
 			return '-';
 		}
 		try {
-			return Html::e(Format::gb($this->app->memory->estimate($p)->totalBytes()));
+			return Html::e(Format::gb($this->app->memory->estimate($p)->totalBytes())
+				. (NgramTable::forPath($p->model_path)?->estimateSuffix(Format::gb(...)) ?? ''));
 		} catch (Throwable) {
 			return '?';
 		}
@@ -1166,7 +1190,30 @@ final class WebApp
 			return '-';
 		}
 		$ctx = $p->args->ctx_size;
-		return (string)($ctx === 0 ? 'model max' : $ctx);
+		if ($ctx !== 0) {
+			return (string)$ctx;
+		}
+		$max = $this->modelCtx()[$p->model_path] ?? 0;
+		return $max > 0 ? '<span title="model max">' . $max . '</span>' : 'model max';
+	}
+
+	/** @var ?array<string,int> model path => trained context, per request */
+	private ?array $modelCtx = null;
+
+	/** @return array<string,int> */
+	private function modelCtx(): array
+	{
+		if ($this->modelCtx === null) {
+			$this->modelCtx = [];
+			try {
+				foreach ($this->app->modelScanner()->scan() as $e) {
+					$this->modelCtx[$e->path] = $e->info?->contextLength() ?? 0;
+				}
+			} catch (Throwable) {
+				// scan failure: cells fall back to "model max"
+			}
+		}
+		return $this->modelCtx;
 	}
 
 	/**

@@ -1,6 +1,11 @@
 /vendor/
 /.idea/
 /composer.lock
+
+# Developer setup: sibling ../p_lib checkout, symlinked.
+# Use with COMPOSER=composer.local.json composer update
+/composer.local.json
+/composer.local.lock
 /storage/presets/*
 !/storage/presets/.gitkeep
 /storage/engines/*

@@ -326,9 +326,11 @@ final class PresetForm
 		$out   = '<select name="model_path"' . self::title($help, 'model_path') . '>';
 		foreach ($models as $e) {
 			$paths[$e->path] = true;
-			$label           = $e->displayName . ' — ' . Format::humanBytes($e->sizeBytes) . ($e->error !== null ? ' [error]' : '');
+			$label           = $e->displayName . ' — ' . Format::humanBytes($e->sizeBytes)
+				. ($e->ngrams()?->sizeSuffix(Format::humanBytes(...)) ?? '') . ($e->error !== null ? ' [error]' : '');
+			$ctx             = $e->info?->contextLength() ?? 0;
 			$out            .= '<option value="' . Html::e($e->path) . '"'
-				. ($e->path === $p->model_path ? ' selected' : '') . '>' . Html::e($label) . '</option>';
+				. ($e->path === $p->model_path ? ' selected' : '') . ($ctx > 0 ? ' data-ctx="' . $ctx . '"' : '') . '>' . Html::e($label) . '</option>';
 		}
 		if ($p->model_path !== '' && !isset($paths[$p->model_path])) {
 			$out .= '<option value="' . Html::e($p->model_path) . '" selected>(not found) ' . Html::e($p->model_path) . '</option>';
@@ -398,7 +400,10 @@ final class PresetForm
 		return match ($type) {
 			'bool'   => '<input type="hidden" name="' . $n . '" value="0">'
 				. '<input type="checkbox" name="' . $n . '" value="1"' . ($value ? ' checked' : '') . $title . '>',
-			'int'     => '<input type="number" step="1" name="' . $n . '" value="' . Html::e($value) . '"' . $title . '>',
+			'int'     => '<input type="number" step="1" name="' . $n . '" value="' . Html::e($value) . '"' . $title
+				. (isset(FieldHints::POW2_STEP[$name])
+					? ' min="' . FieldHints::POW2_STEP[$name] . '" data-pow2-step' . ($name === 'ctx_size' ? ' data-max-from="model_path"' : '')
+					: '') . '>',
 			'float'   => '<input type="number" step="any" name="' . $n . '" value="' . Html::e($value) . '"' . $title . '>',
 			default   => '<input type="text" name="' . $n . '" value="' . Html::e($value) . '"' . $title . '>',
 		};

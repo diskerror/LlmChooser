@@ -74,6 +74,8 @@ final class StartupManager
 			$this->out->error("Cannot write {$this->unitDir}/{$name}");
 			return 1;
 		}
+		// Unit files are public config (the CLI runs with umask 027).
+		@chmod($this->unitDir . '/' . $name, 0644);
 
 		foreach ([['systemctl', 'daemon-reload'], ['systemctl', 'enable', $name]] as $argv) {
 			[$rc, $output] = $this->runner->run($argv);

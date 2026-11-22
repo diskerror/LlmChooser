@@ -15,6 +15,9 @@ if (PHP_VERSION_ID < 80100) {
 	exit(1);
 }
 
+// storage/ is private to the service user: new files 640, directories 750.
+umask(0027);
+
 $app = new App(dirname(__DIR__));
 $out = new Output();
 exit((new Cli($app, $out, new StartupManager($app, $out)))->run(array_slice($argv, 1)));

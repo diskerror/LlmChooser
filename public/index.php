@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
+// storage/ is private to the service user: new files 640, directories 750.
+umask(0027);
+
 use LlmChooser\App;
 use LlmChooser\Http\Request;
 use LlmChooser\Http\WebApp;

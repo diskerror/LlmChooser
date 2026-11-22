@@ -5,7 +5,11 @@ declare(strict_types=1);
 namespace LlmChooser\Engine;
 
 use Closure;
+use JsonException;
 use RuntimeException;
+
+use function Diskerror\Library\Json\decode as jsonDecode;
+use function Diskerror\Library\Json\encode as jsonEncode;
 
 /**
  * The inference engine's own option text (`<binary> --help`), kept per engine
@@ -79,7 +83,12 @@ final class EngineHelp
 		if (!is_file($path)) {
 			return null;
 		}
-		$d = json_decode((string)file_get_contents($path), true);
+		try {
+			$d = jsonDecode(file_get_contents($path));
+		}
+		catch (JsonException) {
+			return null;    // unreadable capture: caller falls back to the bundled help
+		}
 		return is_array($d) && isset($d['entries']) && is_array($d['entries']) ? $d : null;
 	}
 
@@ -123,7 +132,7 @@ final class EngineHelp
 		if (!is_dir($this->dir) && !mkdir($this->dir, 0775, true) && !is_dir($this->dir)) {
 			throw new RuntimeException("cannot create {$this->dir}");
 		}
-		$json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+		$json = jsonEncode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 		if (file_put_contents($this->path($engineId), $json . "\n", LOCK_EX) === false) {
 			throw new RuntimeException('cannot write the help file under ' . $this->dir);
 		}

@@ -63,9 +63,8 @@ class PresetFormTest extends TestCase
 		$html = PresetForm::render(new Preset(['id' => '', 'engine_id' => 'e']), $this->models(), true);
 		$this->assertStringContainsString('name="args[temp]"', $html);
 		$this->assertMatchesRegularExpression('/<select[^>]*name="args\[flash_attn\]"/', $html);
-		$this->assertStringContainsString('<input type="hidden" name="args\[jinja\]" value="0">', $html);
-		$this->assertMatchesRegularExpression('/<input type="checkbox" name="args\[jinja\]" value="1" 
-		checked[^>]*>/', $html);
+		$this->assertStringContainsString('<input type="hidden" name="args[jinja]" value="0">', $html);
+		$this->assertMatchesRegularExpression('/<input type="checkbox" name="args\[jinja\]" value="1" checked[^>]*>/', $html);
 		foreach ((new PresetArgs())->getPublicNames() as $name) {
 			$this->assertStringContainsString('name="args[' . $name . ']"', $html, "missing field {$name}");
 		}
@@ -367,6 +366,20 @@ class PresetFormTest extends TestCase
 		$p    = new Preset(['id' => 'p', 'engine_id' => 'e', 'model_path' => $m]);
 		$html = PresetForm::render($p, [$entry], false);
 		$this->assertStringContainsString('default model: 8192', $html);
+	}
+
+	public function testSizeFieldsGetPow2SpinnerAndModelCtx(): void
+	{
+		$m    = $this->dir . '/ctx.gguf';
+		GgufFixture::model($m, 'llama', 3000);
+		$entry = new ModelEntry($m, 'ctx', 3000, [$m], ['mmproj' => [], 'draft' => [], 'ngrams' => []], (new GgufReader())->read($m), null);
+		$html  = PresetForm::render(new Preset(['id' => 'p', 'engine_id' => 'e', 'model_path' => $m]), [$entry], true);
+
+		$this->assertMatchesRegularExpression('/name="args\\[ctx_size\\]"[^>]* min="0" data-pow2-step data-max-from="model_path"/', $html);
+		$this->assertMatchesRegularExpression('/name="args\\[batch_size\\]"[^>]* min="1" data-pow2-step>/', $html);
+		$this->assertMatchesRegularExpression('/name="args\\[ubatch_size\\]"[^>]* min="1" data-pow2-step>/', $html);
+		$this->assertDoesNotMatchRegularExpression('/name="args\\[top_k\\]"[^>]*data-pow2-step/', $html);
+		$this->assertStringContainsString('data-ctx="8192"', $html);
 	}
 
 	public function testToolbarSwitchesRender(): void

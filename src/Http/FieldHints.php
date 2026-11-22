@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace LlmChooser\Http;
 
+use JsonException;
 use LlmChooser\Engine\HelpParser;
+
+use function Diskerror\Library\Json\decode as jsonDecode;
 
 /**
  * Widget choices the PHP types alone cannot express. Lists come from
@@ -61,6 +64,13 @@ final class FieldHints
 		return $help;
 	}
 
+	/**
+	 * Int fields whose spinner steps through 1, 2, 3, 4, 6, 8, 12, 16, ...
+	 * (2^k and 2^k + 2^(k-1)) instead of by 1. Value = lowest allowed value.
+	 * Any typed value is still accepted.
+	 */
+	public const POW2_STEP = ['ctx_size' => 0, 'batch_size' => 1, 'ubatch_size' => 1];
+
 	public const HELP_FILE = __DIR__ . '/../../resources/field_help.json';
 
 	/** @var array<string, array{label:string,flag:string,level:string,upstream_default:string,short:string,notes:string,reviewed?:string}>|null */
@@ -75,7 +85,12 @@ final class FieldHints
 	public static function load(): array
 	{
 		if (self::$loaded === null) {
-			$data = json_decode((string)@file_get_contents(self::HELP_FILE), true);
+			try {
+				$data = jsonDecode(@file_get_contents(self::HELP_FILE));
+			}
+			catch (JsonException) {
+				$data = null;
+			}
 			if (!is_array($data)) {
 				throw new \RuntimeException('Cannot read or parse ' . self::HELP_FILE);
 			}
