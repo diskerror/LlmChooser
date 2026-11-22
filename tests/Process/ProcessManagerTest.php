@@ -408,4 +408,40 @@ class ProcessManagerTest extends TestCase
         $i = new Instance(['preset_id' => 'p1', 'status' => $status]);
         $this->assertSame($expected, $i->isLive());
     }
+
+    /** Descriptors above 2 that a child started with $argv can see. */
+    private function childFds(array $argv): array
+    {
+        $code = 'echo implode(",", array_filter(scandir("/dev/fd"), "is_numeric"));';
+        $proc = proc_open([...$argv, PHP_BINARY, '-r', $code], [1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'a']], $pipes);
+        $out  = stream_get_contents($pipes[1]);
+        proc_close($proc);
+        return array_values(array_filter(explode(',', $out), static fn(string $n): bool => (int)$n > 2));
+    }
+
+    public function test_detached_child_does_not_inherit_listening_socket(): void
+    {
+        if (!is_executable('/bin/bash') || !is_dir('/dev/fd')) {
+            $this->markTestSkipped('needs /bin/bash and /dev/fd');
+        }
+        $wrap = ProcessManager::detachedArgv([]);
+        // What a clean child sees anyway (scandir's own descriptors).
+        $baseline = count($this->childFds($wrap));
+
+        // PHP's own server sockets are not close-on-exec, same as php -S.
+        $server = stream_socket_server('tcp://127.0.0.1:0');
+        $this->assertNotFalse($server);
+        try {
+            $this->assertGreaterThan($baseline, count($this->childFds([])), 'control: a plain child inherits the open socket');
+            $this->assertSame($baseline, count($this->childFds($wrap)), 'wrapped child still sees the socket');
+        } finally {
+            fclose($server);
+        }
+    }
+
+    public function test_detached_argv_keeps_the_command_intact(): void
+    {
+        $argv = ProcessManager::detachedArgv(['/bin/echo', 'a b', "c'd"]);
+        $this->assertSame(['/bin/echo', 'a b', "c'd"], array_slice($argv, -3));
+    }
 }

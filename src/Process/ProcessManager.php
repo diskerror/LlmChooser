@@ -92,12 +92,7 @@ final class ProcessManager
 		$logFile = $this->logDir . '/' . $presetId . '-' . date('Ymd-His') . '.log';
 		file_put_contents($logFile, '# ' . date('c') . ' ' . $cmd->toString() . "\n");
 
-		$argv = $cmd->argv;
-		if (is_executable('/usr/bin/setsid')) {
-			// Own session: the instance survives the CLI or web request that
-			// started it. Not forked, so the PID we record is the server's.
-			array_unshift($argv, '/usr/bin/setsid');
-		}
+		$argv = self::detachedArgv($cmd->argv);
 		$env  = array_merge(getenv(), $cmd->env);
 		$proc = proc_open($argv, [
 			0 => ['file', '/dev/null', 'r'],
@@ -127,6 +122,34 @@ final class ProcessManager
 		});
 
 		return $this->state->get($presetId);
+	}
+
+	/**
+	 * Wrap $argv so the child (a) runs in its own session and (b) does not
+	 * inherit this process's open descriptors.
+	 *
+	 * (a) lets an instance survive the CLI or web request that started it;
+	 * setsid does not fork here, so the PID we record is the server's.
+	 *
+	 * (b) matters under `php -S`: its listening socket is not close-on-exec,
+	 * so a model server started from a request would keep the web port bound
+	 * after the web server restarts ("Address already in use"). bash closes
+	 * every descriptor above 2, then execs the real command (same PID).
+	 * Without bash or /dev/fd the command is returned with setsid only.
+	 *
+	 * @param list<string> $argv
+	 * @return list<string>
+	 */
+	public static function detachedArgv(array $argv): array
+	{
+		if (is_executable('/bin/bash') && is_dir('/dev/fd')) {
+			$close = 'for f in /dev/fd/*; do n=${f##*/}; [ "$n" -gt 2 ] 2>/dev/null && eval "exec $n>&-"; done; exec "$@"';
+			$argv  = ['/bin/bash', '-c', $close, 'bash', ...$argv];
+		}
+		if (is_executable('/usr/bin/setsid')) {
+			array_unshift($argv, '/usr/bin/setsid');
+		}
+		return $argv;
 	}
 
 	/**
