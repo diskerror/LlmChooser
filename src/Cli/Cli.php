@@ -18,6 +18,8 @@ use Throwable;
 
 use function Diskerror\Library\Json\decode as jsonDecode;
 use function Diskerror\Library\Json\encode as jsonEncode;
+use RuntimeException;
+use function LlmChooser\Config\writeFileAtomic;
 
 /**
  * The command line. run() maps argv to services and returns an exit code;
@@ -341,7 +343,10 @@ final class Cli
 				$fields[$name]['reviewed'] = $h;
 			}
 			$json = jsonEncode($fields, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
-			if (file_put_contents($this->field_help_path, $json) === false) {
+			try {
+				writeFileAtomic($this->field_help_path, $json);
+			}
+			catch (RuntimeException) {
 				$this->out->error("Cannot write {$this->field_help_path}");
 				return 1;
 			}

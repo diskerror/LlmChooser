@@ -18,7 +18,10 @@
     "autoload": {
         "psr-4": {
             "LlmChooser\\": "src/"
-        }
+        },
+        "files": [
+            "src/Config/files.php"
+        ]
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5"

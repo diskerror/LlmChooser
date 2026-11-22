@@ -8,6 +8,7 @@ use JsonException;
 use RuntimeException;
 
 use function Diskerror\Library\Json\decode as jsonDecode;
+use function LlmChooser\Config\writeFileAtomic;
 
 /**
  * Shared JSON-file behaviour for the config repositories.
@@ -81,14 +82,7 @@ trait JsonStore
 			return false;
 		}
 
-		$tmp = $path . '.tmp' . getmypid();
-		if (file_put_contents($tmp, $json) === false) {
-			throw new RuntimeException("Cannot write config file: {$path}");
-		}
-		if (!rename($tmp, $path)) {
-			@unlink($tmp);
-			throw new RuntimeException("Cannot replace config file: {$path}");
-		}
+		writeFileAtomic($path, $json);
 
 		return true;
 	}

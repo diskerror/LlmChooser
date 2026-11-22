@@ -10,6 +10,7 @@ use LlmChooser\Config\JsonStore;
 use RuntimeException;
 
 use function Diskerror\Library\Json\encode as jsonEncode;
+use function LlmChooser\Config\ensureDir;
 
 class EngineRepository
 {
@@ -17,11 +18,7 @@ class EngineRepository
 
     public function __construct(private readonly string $dir)
     {
-        if (!is_dir($this->dir)) {
-            if (!mkdir($this->dir, 0775, true) && !is_dir($this->dir)) {
-                throw new RuntimeException("Cannot create engine directory: {$this->dir}");
-            }
-        }
+        ensureDir($this->dir);
     }
 
     public function load(string $id): Engine

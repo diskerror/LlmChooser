@@ -11,6 +11,8 @@ use RuntimeException;
 
 use function Diskerror\Library\Json\decode as jsonDecode;
 use function Diskerror\Library\Json\encode as jsonEncode;
+use function LlmChooser\Config\ensureDir;
+use function LlmChooser\Config\writeFileAtomic;
 
 /**
  * The inference engine's own option text (`<binary> --help`), kept per engine
@@ -130,13 +132,9 @@ final class EngineHelp
 	/** @param array<string,mixed> $data */
 	private function save(string $engine_id, array $data): void
 	{
-		if (!is_dir($this->dir) && !mkdir($this->dir, 0775, true) && !is_dir($this->dir)) {
-			throw new RuntimeException("cannot create {$this->dir}");
-		}
+		ensureDir($this->dir);
 		$json = jsonEncode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-		if (file_put_contents($this->path($engine_id), $json . "\n", LOCK_EX) === false) {
-			throw new RuntimeException('cannot write the help file under ' . $this->dir);
-		}
+		writeFileAtomic($this->path($engine_id), $json . "\n");
 	}
 
 	private function path(string $engine_id): string

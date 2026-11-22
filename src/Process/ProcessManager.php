@@ -10,6 +10,7 @@ use LlmChooser\Memory\MemoryService;
 use LlmChooser\Preset\Preset;
 use LlmChooser\Preset\PresetRepository;
 use RuntimeException;
+use function LlmChooser\Config\ensureDir;
 
 /**
  * Starts, watches and stops llama-server instances.
@@ -86,9 +87,7 @@ final class ProcessManager
 
 		$cmd = $this->builder->build($preset, $engine, $port);
 
-		if (!is_dir($this->log_dir) && !mkdir($this->log_dir, 0775, true) && !is_dir($this->log_dir)) {
-			throw new RuntimeException("Cannot create log directory: {$this->log_dir}");
-		}
+		ensureDir($this->log_dir);
 		$log_file = $this->log_dir . '/' . $preset_id . '-' . date('Ymd-His') . '.log';
 		file_put_contents($log_file, '# ' . date('c') . ' ' . $cmd->toString() . "\n");
 

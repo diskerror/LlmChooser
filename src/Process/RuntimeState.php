@@ -8,6 +8,7 @@ use RuntimeException;
 
 use function Diskerror\Library\Json\decode as jsonDecode;
 use function Diskerror\Library\Json\encode as jsonEncode;
+use function LlmChooser\Config\ensureDir;
 
 /**
  * storage/runtime_state.json — { "<preset_id>": Instance, ... }
@@ -64,9 +65,7 @@ final class RuntimeState
 	private function open()
 	{
 		$dir = dirname($this->file);
-		if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
-			throw new RuntimeException("Cannot create directory: {$dir}");
-		}
+		ensureDir($dir);
 		$fh = fopen($this->file, 'c+');
 		if ($fh === false) {
 			throw new RuntimeException("Cannot open runtime state: {$this->file}");

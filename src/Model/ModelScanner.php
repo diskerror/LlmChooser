@@ -12,6 +12,9 @@ use RecursiveIteratorIterator;
 
 use function Diskerror\Library\Json\decode as jsonDecode;
 use function Diskerror\Library\Json\encode as jsonEncode;
+use RuntimeException;
+use function LlmChooser\Config\ensureDir;
+use function LlmChooser\Config\writeFileAtomic;
 
 /**
  * Walks model roots, builds ModelEntry objects (shards collapsed, sidecars
@@ -331,14 +334,13 @@ final class ModelScanner
 		if ($this->cache_file === null) {
 			return;
 		}
-		$dir = dirname($this->cache_file);
-		if (!is_dir($dir)) {
-			mkdir($dir, 0775, true);
+		try {
+			ensureDir(dirname($this->cache_file));
+			writeFileAtomic($this->cache_file, jsonEncode($cache, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE));
 		}
-		file_put_contents(
-			$this->cache_file,
-			jsonEncode($cache, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE)
-		);
+		catch (RuntimeException) {
+			// A cache that can't be written only costs a re-read next scan.
+		}
 	}
 
 	/** @param array $e */
