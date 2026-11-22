@@ -33,10 +33,10 @@ final class Format
 		return $bytes . ' B';
 	}
 
-	/** Decimal GB, number only — for columns whose header carries the unit. */
+	/** GiB (powers of two), two decimals, number only — for columns whose header carries the unit. */
 	public static function gbNumber(int $bytes): string
 	{
-		return sprintf('%.2f', $bytes / 1e9);
+		return sprintf('%.2f', $bytes / 1024 ** 3);
 	}
 
 	/** Parameter count as "31B" / "12.5B" / "780M" (trailing zeros trimmed). */

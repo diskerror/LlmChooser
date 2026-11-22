@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace LlmChooser\Memory;
 
+use LlmChooser\Cli\Format;
+
 final class AdmissionResult
 {
 	/**
@@ -22,12 +24,12 @@ final class AdmissionResult
 		foreach ($this->per_budget as $id => $r) {
 			$ok      = $r['need'] <= $r['available'];
 			$lines[] = sprintf(
-				'%s %s: need %.1f GB + already running %.1f GB vs available %.1f GB',
+				'%s %s: need %s + already running %s vs available %s',
 				$ok ? 'OK  ' : 'FAIL',
 				$id,
-				$r['need'] / 1e9,
-				$r['already'] / 1e9,
-				$r['available'] / 1e9
+				Format::humanBytes($r['need']),
+				Format::humanBytes($r['already']),
+				Format::humanBytes($r['available'])
 			);
 		}
 		return implode("\n", $lines);
