@@ -5,13 +5,19 @@ declare(strict_types=1);
 namespace LlmChooser\Config;
 
 use JsonException;
+use JsonSerializable;
 use RuntimeException;
 
 use function Diskerror\Library\Json\decode as jsonDecode;
+use function Diskerror\Library\Json\encode as jsonEncode;
 use function LlmChooser\Config\writeFileAtomic;
 
 /**
- * Shared JSON-file behaviour for the config repositories.
+ * Shared JSON-file behaviour for the config repositories: one
+ * <dir>/<id>.json file per item.
+ *
+ * The using class provides `private readonly string $dir` and
+ * `private const NOUN` ("Preset", "Engine") for messages.
  *
  * Policy:
  * - Structurally malformed JSON is a HARD failure for that one file. It is
@@ -36,6 +42,50 @@ trait JsonStore
 	public function broken(): array
 	{
 		return $this->broken;
+	}
+
+	/**
+	 * Decoded data of item $id.
+	 *
+	 * @throws RuntimeException if the id is invalid, the file is missing or not valid JSON.
+	 */
+	private function loadData(string $id): array
+	{
+		$path = $this->pathFor($id);
+		if (!is_file($path)) {
+			throw new RuntimeException(self::NOUN . " not found: {$id}");
+		}
+		return $this->readJson($path);
+	}
+
+	/** @throws RuntimeException if the id is empty or invalid, or the write fails. */
+	private function saveItem(string $id, JsonSerializable $item): void
+	{
+		if ($id === '') {
+			throw new RuntimeException(self::NOUN . ' must have a non-empty id before saving.');
+		}
+		$this->writeJsonIfChanged($this->pathFor($id), jsonEncode($item));
+	}
+
+	public function delete(string $id): void
+	{
+		$path = $this->pathFor($id);
+		if (is_file($path)) {
+			unlink($path);
+		}
+	}
+
+	/**
+	 * Dots are allowed (model ids like "qwen3.8-flash" need them), but never
+	 * ".." or a leading/trailing dot: the id is used verbatim as a filename,
+	 * so this is the only thing standing between here and path traversal.
+	 */
+	private function pathFor(string $id): string
+	{
+		if (!Id::isValid($id)) {
+			throw new RuntimeException('Invalid ' . strtolower(self::NOUN) . " id: {$id}");
+		}
+		return $this->dir . '/' . $id . '.json';
 	}
 
 	/**

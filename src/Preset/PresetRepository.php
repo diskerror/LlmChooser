@@ -4,17 +4,15 @@ declare(strict_types=1);
 
 namespace LlmChooser\Preset;
 
-use LlmChooser\Config\BrokenFile;
-use LlmChooser\Config\Id;
 use LlmChooser\Config\JsonStore;
-use RuntimeException;
 
-use function Diskerror\Library\Json\encode as jsonEncode;
 use function LlmChooser\Config\ensureDir;
 
 class PresetRepository
 {
     use JsonStore;
+
+    private const NOUN = 'Preset';
 
     public function __construct(private readonly string $dir)
     {
@@ -23,28 +21,12 @@ class PresetRepository
 
     public function load(string $id): Preset
     {
-        $path = $this->pathFor($id);
-        if (!is_file($path)) {
-            throw new RuntimeException("Preset not found: {$id}");
-        }
-        return new Preset($this->readJson($path));
+        return new Preset($this->loadData($id));
     }
 
     public function save(Preset $preset): void
     {
-        if ($preset->id === '') {
-            throw new RuntimeException('Preset must have a non-empty id before saving.');
-        }
-        $json = jsonEncode($preset);
-        $this->writeJsonIfChanged($this->pathFor($preset->id), $json);
-    }
-
-    public function delete(string $id): void
-    {
-        $path = $this->pathFor($id);
-        if (is_file($path)) {
-            unlink($path);
-        }
+        $this->saveItem($preset->id, $preset);
     }
 
     public function setEnabled(string $id, bool $enabled): Preset
@@ -63,17 +45,5 @@ class PresetRepository
             $out[$preset->id] = $preset;
         }
         return $out;
-    }
-
-    private function pathFor(string $id): string
-    {
-        // Dots are allowed (model ids like "qwen3.8-flash" need them), but
-        // never ".." or a leading/trailing dot — id is used verbatim as a
-        // filename, so that's the only thing standing between here and
-        // path traversal.
-        if (!Id::isValid($id)) {
-            throw new RuntimeException("Invalid preset id: {$id}");
-        }
-        return $this->dir . '/' . $id . '.json';
     }
 }
