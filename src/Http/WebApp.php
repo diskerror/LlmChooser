@@ -44,10 +44,7 @@ final class WebApp
 		try {
 			return $this->router->dispatch($r);
 		} catch (Throwable $e) {
-			return Response::html(
-				Html::page('Error', '<pre>' . Html::e($e->getMessage()) . '</pre>', '', '', $r->path, $this->headerSummary($this->app->state->all())),
-				500
-			);
+			return Response::html($this->page($r, 'Error', '<pre>' . Html::e($e->getMessage()) . '</pre>'), 500);
 		}
 	}
 
@@ -87,6 +84,16 @@ final class WebApp
 	}
 
 	// ---------------------------------------------------------------- pages
+
+	private function page(Request $r, string $title, string $body, string $msg = '', string $head = ''): string
+	{
+		return Html::page($title, $body, $msg, $head, $r->path, $this->headerSummary($this->app->state->all()));
+	}
+
+	private function notFound(Request $r, string $text): Response
+	{
+		return Response::html($this->page($r, 'Not found', '<p>' . Html::e($text) . '</p>'), 404);
+	}
 
 	private function dashboard(Request $r): Response
 	{
@@ -244,7 +251,7 @@ final class WebApp
 			}
 		}
 
-		return Response::html(Html::page('New preset', PresetForm::render($preset, $models, true, [], false, $this->app->engines->loadAll(), $this->presetEstimateBytes($preset), $this->presetHelpEntries($preset)), $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all())));
+		return Response::html($this->page($r, 'New preset', PresetForm::render($preset, $models, true, [], false, $this->app->engines->loadAll(), $this->presetEstimateBytes($preset), $this->presetHelpEntries($preset)), $r->query('msg')));
 	}
 
 	/**
@@ -288,7 +295,7 @@ final class WebApp
 		$errors = PresetValidator::validate($preset, $this->app->engines, true, $this->app->presets);
 		if ($errors !== []) {
 			return Response::html(
-				Html::page('New preset', PresetForm::render($preset, $this->app->modelScanner()->scan(), true, $errors, false, $this->app->engines->loadAll(), $this->presetEstimateBytes($preset), $this->presetHelpEntries($preset)), '', '', $r->path, $this->headerSummary($this->app->state->all())),
+				$this->page($r, 'New preset', PresetForm::render($preset, $this->app->modelScanner()->scan(), true, $errors, false, $this->app->engines->loadAll(), $this->presetEstimateBytes($preset), $this->presetHelpEntries($preset))),
 				422
 			);
 		}
@@ -301,11 +308,11 @@ final class WebApp
 		try {
 			$preset = $this->app->presets->load($id);
 		} catch (Throwable) {
-			return Response::html(Html::page('Not found', '<p>No preset ' . Html::e($id) . '.</p>', '', '', $r->path, $this->headerSummary($this->app->state->all())), 404);
+			return $this->notFound($r, "No preset {$id}.");
 		}
 		$running = $this->instanceIsLive($id);
 		return Response::html(
-			Html::page('Edit ' . $id, PresetForm::render($preset, $this->app->modelScanner()->scan(), false, [], $running, $this->app->engines->loadAll(), $this->presetEstimateBytes($preset), $this->presetHelpEntries($preset)), $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all()))
+			$this->page($r, 'Edit ' . $id, PresetForm::render($preset, $this->app->modelScanner()->scan(), false, [], $running, $this->app->engines->loadAll(), $this->presetEstimateBytes($preset), $this->presetHelpEntries($preset)), $r->query('msg'))
 		);
 	}
 
@@ -320,7 +327,7 @@ final class WebApp
 		try {
 			$preset = $this->app->presets->load($id);
 		} catch (Throwable) {
-			return Response::html(Html::page('Not found', '<p>No preset ' . Html::e($id) . '.</p>', '', '', $r->path, $this->headerSummary($this->app->state->all())), 404);
+			return $this->notFound($r, "No preset {$id}.");
 		}
 		$preset->assign(PresetForm::fromPost($r->post));
 		$preset->id = $id; // editing never renames; the id input is readonly
@@ -329,7 +336,7 @@ final class WebApp
 		$errors = PresetValidator::validate($preset, $this->app->engines, false, $this->app->presets);
 		if ($errors !== []) {
 			return Response::html(
-				Html::page('Edit ' . $id, PresetForm::render($preset, $this->app->modelScanner()->scan(), false, $errors, $this->instanceIsLive($id), $this->app->engines->loadAll(), $this->presetEstimateBytes($preset), $this->presetHelpEntries($preset)), '', '', $r->path, $this->headerSummary($this->app->state->all())),
+				$this->page($r, 'Edit ' . $id, PresetForm::render($preset, $this->app->modelScanner()->scan(), false, $errors, $this->instanceIsLive($id), $this->app->engines->loadAll(), $this->presetEstimateBytes($preset), $this->presetHelpEntries($preset))),
 				422
 			);
 		}
@@ -379,7 +386,7 @@ final class WebApp
 				. '<form method="post" action="/presets/' . Html::e($id) . '/' . Html::e($op) . '">'
 				. '<input type="hidden" name="force" value="1">'
 				. '<button type="submit" class="danger">Start anyway</button></form>';
-			return Response::html(Html::page('Not enough memory', $body, '', '', $r->path, $this->headerSummary($this->app->state->all())), 200);
+			return Response::html($this->page($r, 'Not enough memory', $body), 200);
 		}
 	}
 
@@ -427,12 +434,12 @@ final class WebApp
 		try {
 			$preset = $this->app->presets->load($id);
 		} catch (Throwable) {
-			return Response::html(Html::page('Not found', '<p>No preset ' . Html::e($id) . '.</p>', '', '', $r->path, $this->headerSummary($this->app->state->all())), 404);
+			return $this->notFound($r, "No preset {$id}.");
 		}
 		try {
 			$alloc = $this->app->memory->estimate($preset);
 		} catch (Throwable $e) {
-			return Response::html(Html::page('Estimate', '<p class="flash">Estimate failed: ' . Html::e($e->getMessage()) . '</p>', '', '', $r->path, $this->headerSummary($this->app->state->all())), 200);
+			return Response::html($this->page($r, 'Estimate', '<p class="flash">Estimate failed: ' . Html::e($e->getMessage()) . '</p>'), 200);
 		}
 		$rows = '';
 		foreach ($alloc->breakdown as $k => $v) {
@@ -448,20 +455,20 @@ final class WebApp
 				. ($ngrams?->estimateSuffix(Format::humanBytes(...)) ?? '')) . '</th></tr></table>'
 			. ($ngrams !== null ? '<p class="note">' . Html::e(ltrim($ngrams->note(), '*+ ')) . '</p>' : '')
 			. '<h2>Per device</h2><table><tr><th>Device</th><th>Bytes</th></tr>' . $devs . '</table>';
-		return Response::html(Html::page('Estimate ' . $id, $body, '', '', $r->path, $this->headerSummary($this->app->state->all())));
+		return Response::html($this->page($r, 'Estimate ' . $id, $body));
 	}
 
 	private function log(Request $r, string $id): Response
 	{
 		$i = $this->app->state->get($id);
 		if ($i === null || $i->log_file === '' || !is_file($i->log_file)) {
-			return Response::html(Html::page('Not found', '<p>No log for ' . Html::e($id) . '.</p>', '', '', $r->path, $this->headerSummary($this->app->state->all())), 404);
+			return $this->notFound($r, "No log for {$id}.");
 		}
 		$text = Format::tail($i->log_file, 200);
 		if ($r->query('raw') === '1') {
 			return Response::text($text);
 		}
-		return Response::html(Html::page('Log ' . $id, '<pre class="log">' . Html::e($text) . '</pre>', '', '', $r->path, $this->headerSummary($this->app->state->all())));
+		return Response::html($this->page($r, 'Log ' . $id, '<pre class="log">' . Html::e($text) . '</pre>'));
 	}
 
 	private function models(Request $r): Response
@@ -514,7 +521,7 @@ final class WebApp
 			. ($rows !== '' ? $rows : '<tbody><tr><td colspan="11">No models found.</td></tr></tbody>')
 			. '</table>'
 			. implode('', array_map(static fn(string $n): string => '<p class="note">' . Html::e($n) . '</p>', array_keys($notes)));
-		return Response::html(Html::page('Models', $body, $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all())));
+		return Response::html($this->page($r, 'Models', $body, $r->query('msg')));
 	}
 
 	// ---------------------------------------------------------------- engines
@@ -548,7 +555,7 @@ final class WebApp
 			. '<table><tr><th>id</th><th>name</th><th>binary</th><th>model dir</th><th>host</th><th>ports</th><th>in use</th><th>actions</th></tr>'
 			. ($rows !== '' ? $rows : '<tr><td colspan="8">No engines yet.</td></tr>')
 			. '</table>';
-		return Response::html(Html::page('Engines', $body, $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all())));
+		return Response::html($this->page($r, 'Engines', $body, $r->query('msg')));
 	}
 
 	/** preset ids referencing each engine_id, for the "in use" column and delete guard. @return array<string,list<string>> */
@@ -577,7 +584,7 @@ final class WebApp
 		} else {
 			$engine = new Engine();
 		}
-		return Response::html(Html::page('New engine', EngineForm::render($engine, true, [], null, true), $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all())));
+		return Response::html($this->page($r, 'New engine', EngineForm::render($engine, true, [], null, true), $r->query('msg')));
 	}
 
 	private function engineCreate(Request $r): Response
@@ -586,7 +593,7 @@ final class WebApp
 		$errors = EngineValidator::validate($engine, true, $this->app->engines);
 		if ($errors !== []) {
 			return Response::html(
-				Html::page('New engine', EngineForm::render($engine, true, $errors, null, ($r->post['reload_help'] ?? '') === '1'), '', '', $r->path, $this->headerSummary($this->app->state->all())),
+				$this->page($r, 'New engine', EngineForm::render($engine, true, $errors, null, ($r->post['reload_help'] ?? '') === '1')),
 				422
 			);
 		}
@@ -599,9 +606,9 @@ final class WebApp
 		try {
 			$engine = $this->app->engines->load($id);
 		} catch (Throwable) {
-			return Response::html(Html::page('Not found', '<p>No engine ' . Html::e($id) . '.</p>', '', '', $r->path, $this->headerSummary($this->app->state->all())), 404);
+			return $this->notFound($r, "No engine {$id}.");
 		}
-		return Response::html(Html::page('Edit ' . $id, EngineForm::render($engine, false, [], $this->engineHelpInfo($id)), $r->query('msg'), '', $r->path, $this->headerSummary($this->app->state->all())));
+		return Response::html($this->page($r, 'Edit ' . $id, EngineForm::render($engine, false, [], $this->engineHelpInfo($id)), $r->query('msg')));
 	}
 
 	private function engineSave(Request $r, string $id): Response
@@ -609,7 +616,7 @@ final class WebApp
 		try {
 			$engine = $this->app->engines->load($id);
 		} catch (Throwable) {
-			return Response::html(Html::page('Not found', '<p>No engine ' . Html::e($id) . '.</p>', '', '', $r->path, $this->headerSummary($this->app->state->all())), 404);
+			return $this->notFound($r, "No engine {$id}.");
 		}
 		$engine->assign(EngineForm::fromPost($r->post));
 		$engine->id = $id; // editing never renames; the id input is readonly
@@ -617,7 +624,7 @@ final class WebApp
 		$errors = EngineValidator::validate($engine, false, $this->app->engines);
 		if ($errors !== []) {
 			return Response::html(
-				Html::page('Edit ' . $id, EngineForm::render($engine, false, $errors, $this->engineHelpInfo($id), ($r->post['reload_help'] ?? '') === '1'), '', '', $r->path, $this->headerSummary($this->app->state->all())),
+				$this->page($r, 'Edit ' . $id, EngineForm::render($engine, false, $errors, $this->engineHelpInfo($id), ($r->post['reload_help'] ?? '') === '1')),
 				422
 			);
 		}
