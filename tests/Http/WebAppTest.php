@@ -63,11 +63,11 @@ class WebAppTest extends TestCase
 		$this->web = new WebApp($this->app);
 	}
 
-	private function makeApp(float $availableGb): App
+	private function makeApp(float $available_gb): App
 	{
 		$g    = 1024 ** 3;
 		$topo = new MemoryTopology([
-			new Device('cpu', Device::KIND_RAM, 100 * $g, (int)($availableGb * $g)),
+			new Device('cpu', Device::KIND_RAM, 100 * $g, (int)($available_gb * $g)),
 		]);
 		return new App($this->dir, new FixedTopologyProbe($topo));
 	}
@@ -312,9 +312,9 @@ class WebAppTest extends TestCase
 	{
 		$this->app->presets->setEnabled('p1', false);
 		$body = $this->get('/presets')->body;
-		$posP2 = strpos($body, '/presets/p2/edit');
-		$posP1 = strpos($body, '/presets/p1/edit');
-		$this->assertLessThan($posP1, $posP2, 'disabled p1 must render after enabled p2');
+		$pos_p2 = strpos($body, '/presets/p2/edit');
+		$pos_p1 = strpos($body, '/presets/p1/edit');
+		$this->assertLessThan($pos_p1, $pos_p2, 'disabled p1 must render after enabled p2');
 		$this->assertStringContainsString('class="disabled-row"', $body);
 	}
 

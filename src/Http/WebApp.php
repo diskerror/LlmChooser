@@ -274,13 +274,13 @@ final class WebApp
 		$available = 0;
 		foreach ($topo->devices as $d) {
 			if ($topo->budgetId($d->id) === $d->id) {
-				$available = max($available, $d->availableBytes);
+				$available = max($available, $d->available_bytes);
 			}
 		}
 		$est  = new MemoryEstimator();
 		$per1k = $est->kvBytesPer1k($e->info, 'q8_0');
 		for ($i = 0; $i < 6; ++$i) {
-			$need = $e->sizeBytes + (int)ceil($per1k * $ctx / 1000) + MemoryEstimator::OVERHEAD_FIXED_BYTES;
+			$need = $e->size_bytes + (int)ceil($per1k * $ctx / 1000) + MemoryEstimator::OVERHEAD_FIXED_BYTES;
 			if ($need <= $available) {
 				return $ctx;
 			}
@@ -446,7 +446,7 @@ final class WebApp
 			$rows .= '<tr><td>' . Html::e($k) . '</td><td>' . Html::e(Format::humanBytes((int)$v)) . '</td></tr>';
 		}
 		$devs = '';
-		foreach ($alloc->perDevice as $d => $b) {
+		foreach ($alloc->per_device as $d => $b) {
 			$devs .= '<tr><td>' . Html::e($d) . '</td><td>' . Html::e(Format::humanBytes($b)) . '</td></tr>';
 		}
 		$ngrams = NgramTable::forPath($preset->model_path);
@@ -473,7 +473,7 @@ final class WebApp
 
 	private function models(Request $r): Response
 	{
-		$usedBy = $this->usedByMap();
+		$used_by = $this->usedByMap();
 		$rows   = '';
 		$notes  = [];
 		foreach ($this->app->modelScanner()->scan() as $e) {
@@ -490,7 +490,7 @@ final class WebApp
 			$rows .= '<td>' . Html::e($info?->architecture() ?? '-') . '</td>';
 			$rows .= '<td data-sort="' . $this->paramSortValue($e) . '">' . Html::e($this->paramCell($e)) . '</td>';
 			$rows .= '<td>' . Html::e($info !== null ? $info->fileTypeName() : '-') . '</td>';
-			$rows .= '<td data-sort="' . $e->sizeBytes . '">' . Html::e(Format::gbNumber($e->sizeBytes)
+			$rows .= '<td data-sort="' . $e->size_bytes . '">' . Html::e(Format::gbNumber($e->size_bytes)
 				. ($ngrams?->sizeSuffix(Format::gbNumber(...)) ?? '')) . '</td>';
 			$rows .= '<td data-sort="' . ($info?->contextLength() ?? 0) . '">'
 				. Html::e((string)($info?->contextLength() ?? '-'))
@@ -500,7 +500,7 @@ final class WebApp
 			$rows .= '<td>' . Html::e($this->headsCell($info)) . '</td>';
 			$rows .= '<td>' . Html::e($this->headDimCell($info)) . '</td>';
 			$rows .= '<td>' . $this->extrasCell($e) . '</td>';
-			$rows .= '<td>' . $this->hasPresetCell($usedBy[$e->path] ?? []) . '</td></tr>';
+			$rows .= '<td>' . $this->hasPresetCell($used_by[$e->path] ?? []) . '</td></tr>';
 			if ($e->error !== null) {
 				$rows .= '<tr class="messagerow"><td colspan="11">⚠ ' . Html::e($e->error) . '</td></tr>';
 			}
@@ -529,14 +529,14 @@ final class WebApp
 	private function engineList(Request $r): Response
 	{
 		$engines = $this->app->engines->loadAll();
-		$usedBy  = $this->engineUsedByMap();
+		$used_by  = $this->engineUsedByMap();
 
 		$rows = '';
 		foreach ($engines as $eid => $e) {
-			$inUse = $usedBy[$eid] ?? [];
+			$in_use = $used_by[$eid] ?? [];
 			$acts  = '<a class="btn" href="/engines/' . Html::e($eid) . '/edit">Edit</a> '
 				. '<a class="btn" href="/engines/new?copy=' . Html::e(rawurlencode((string)$eid)) . '">Duplicate</a> ';
-			if ($inUse === []) {
+			if ($in_use === []) {
 				$acts .= Html::postButton("/engines/{$eid}/delete", 'Delete', 'danger', "Delete engine {$eid}?");
 			}
 			$rows .= '<tr>'
@@ -546,7 +546,7 @@ final class WebApp
 				. '<td>' . Html::e($e->model_dir !== '' ? $e->model_dir : '-') . '</td>'
 				. '<td>' . Html::e($e->host) . '</td>'
 				. '<td>' . Html::e((string)$e->port_range->min) . '–' . Html::e((string)$e->port_range->max) . '</td>'
-				. '<td>' . Html::e($inUse !== [] ? implode(', ', $inUse) : '-') . '</td>'
+				. '<td>' . Html::e($in_use !== [] ? implode(', ', $in_use) : '-') . '</td>'
 				. '<td>' . $acts . '</td></tr>';
 		}
 
@@ -669,9 +669,9 @@ final class WebApp
 
 	private function engineDelete(string $id): Response
 	{
-		$usedBy = $this->engineUsedByMap()[$id] ?? [];
-		if ($usedBy !== []) {
-			return Response::redirect('/engines', 'In use by ' . implode(', ', $usedBy) . ' — repoint those presets first');
+		$used_by = $this->engineUsedByMap()[$id] ?? [];
+		if ($used_by !== []) {
+			return Response::redirect('/engines', 'In use by ' . implode(', ', $used_by) . ' — repoint those presets first');
 		}
 		$this->app->engines->delete($id);
 		$this->app->help->delete($id);
@@ -686,7 +686,7 @@ final class WebApp
 	 */
 	private function modelNameCell(ModelEntry $e): string
 	{
-		$parts = explode('/', $e->displayName);
+		$parts = explode('/', $e->display_name);
 		$file  = (string)array_pop($parts);
 		$provider = $parts === [] ? '' : (string)array_shift($parts);
 		$middle   = implode('/', $parts);
@@ -699,7 +699,7 @@ final class WebApp
 			$out .= '<div class="model-path muted">' . Html::e($middle) . '</div>';
 		}
 		$out .= '<div class="model-name">' . Html::e($file)
-			. ($e->isSharded() ? ' <span class="muted">(' . count($e->shardPaths) . ' parts)</span>' : '')
+			. ($e->isSharded() ? ' <span class="muted">(' . count($e->shard_paths) . ' parts)</span>' : '')
 			. '</div>';
 		return $out;
 	}
@@ -810,16 +810,16 @@ final class WebApp
 		// Total at the model's trained max ctx, weights + KV at f16
 		// (llama.cpp's default cache type) + the estimator's fixed overhead.
 		$ctx   = $info->contextLength();
-		$total = $e->sizeBytes + (int)ceil($per['f16'] * $ctx / 1000) + \LlmChooser\Memory\MemoryEstimator::OVERHEAD_FIXED_BYTES;
+		$total = $e->size_bytes + (int)ceil($per['f16'] * $ctx / 1000) + \LlmChooser\Memory\MemoryEstimator::OVERHEAD_FIXED_BYTES;
 		$out .= '<tr><th>Total at ' . Html::e((string)$ctx) . ' ctx (f16 KV)</th><td>'
 			. Html::e(Format::humanBytes($total) . ($e->ngrams()?->estimateSuffix(Format::humanBytes(...)) ?? ''))
-			. ' — ' . Html::e(Format::humanBytes($e->sizeBytes)) . ' weights'
+			. ' — ' . Html::e(Format::humanBytes($e->size_bytes)) . ' weights'
 			. $this->freeMemoryNote($total)
 			. '</td></tr>';
 		$ngrams = $e->ngrams();
 		if ($ngrams !== null) {
 			$out .= '<tr><th>N-gram table</th><td>'
-				. Html::e(($ngrams->embedded ? 'in the model file' : ($ngrams->filePath ?? '') . ($ngrams->fileBytes !== null ? ' — ' . Format::humanBytes($ngrams->fileBytes) : ' — missing'))
+				. Html::e(($ngrams->embedded ? 'in the model file' : ($ngrams->file_path ?? '') . ($ngrams->file_bytes !== null ? ' — ' . Format::humanBytes($ngrams->file_bytes) : ' — missing'))
 					. '. ' . ltrim($ngrams->note(), '*+ '))
 				. '</td></tr>';
 		}
@@ -855,8 +855,8 @@ final class WebApp
 			if ($topo->budgetId($d->id) !== $d->id) {
 				continue;
 			}
-			$notes[] = Html::e($d->id) . ' free ' . Html::e(Format::humanBytes($d->availableBytes))
-				. ($d->availableBytes >= $total ? ' ✓' : ' ✗');
+			$notes[] = Html::e($d->id) . ' free ' . Html::e(Format::humanBytes($d->available_bytes))
+				. ($d->available_bytes >= $total ? ' ✓' : ' ✗');
 		}
 		return $notes === [] ? '' : ' vs ' . implode(', ', $notes);
 	}
@@ -990,7 +990,7 @@ final class WebApp
 		], JSON_UNESCAPED_SLASHES);
 
 		$begin     = microtime(true);
-		$firstByte = null;
+		$first_byte = null;
 		$response  = '';
 		$curl      = new Curl("http://{$i->host}:{$i->port}/v1/chat/completions", [
 			CURLOPT_POST           => true,
@@ -998,9 +998,9 @@ final class WebApp
 			CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
 			CURLOPT_CONNECTTIMEOUT => 5,
 			CURLOPT_TIMEOUT        => 120, // a cold model can take a while for one token
-			CURLOPT_HEADERFUNCTION => function ($ch, string $line) use (&$firstByte): int {
-				if ($firstByte === null && trim($line) !== '') {
-					$firstByte = microtime(true);
+			CURLOPT_HEADERFUNCTION => function ($ch, string $line) use (&$first_byte): int {
+				if ($first_byte === null && trim($line) !== '') {
+					$first_byte = microtime(true);
 				}
 				return strlen($line);
 			},
@@ -1027,7 +1027,7 @@ final class WebApp
 		return Response::json([
 			'ok'       => true,
 			// time to first response byte, not literally first token (see doc comment)
-			'ttft_ms'  => (int)round((($firstByte ?? $end) - $begin) * 1000),
+			'ttft_ms'  => (int)round((($first_byte ?? $end) - $begin) * 1000),
 			'total_ms' => (int)round(($end - $begin) * 1000),
 		]);
 	}
@@ -1058,16 +1058,16 @@ final class WebApp
 	 */
 	private function loadedRows(iterable $instances, iterable $presets): string
 	{
-		$byPreset = [];
+		$by_preset = [];
 		foreach ($presets as $pid => $p) {
-			$byPreset[$pid] = $p;
+			$by_preset[$pid] = $p;
 		}
 		$rows = '';
 		foreach ($instances as $pid => $i) {
 			if (!in_array($i->status, [Instance::LOADING, Instance::READY, Instance::ERROR], true)) {
 				continue;
 			}
-			$p     = $byPreset[$pid] ?? null;
+			$p     = $by_preset[$pid] ?? null;
 			$model = $p !== null && $p->model_path !== '' ? basename($p->model_path) : '-';
 			$alloc = $i->allocation !== [] ? Allocation::fromArray($i->allocation) : null;
 			if ($i->status === Instance::ERROR) {
@@ -1111,14 +1111,14 @@ final class WebApp
 			if (!$p->enabled || isset($instances[$pid])) {
 				continue;
 			}
-			$estCell = $this->estimateCell($p);
+			$est_cell = $this->estimateCell($p);
 			$acts = Html::postButton("/presets/{$pid}/start", 'Start')
 				. '<a class="btn" href="/presets/' . Html::e($pid) . '/edit">Edit</a> '
 				. '<a class="btn" href="/presets/new?copy=' . Html::e(rawurlencode((string)$pid)) . '">Duplicate</a>';
 			$rows .= '<tr><td><a href="/presets/' . Html::e($pid) . '/edit">' . Html::e($pid) . '</a></td>'
 				. '<td>' . Html::e($p->model_path !== '' ? basename($p->model_path) : '-') . '</td>'
 				. '<td class="num">' . $this->ctxCell($p) . '</td>'
-				. '<td class="num">' . $estCell . '</td>'
+				. '<td class="num">' . $est_cell . '</td>'
 				. '<td>' . $acts . '</td></tr>';
 		}
 		return $rows;
@@ -1205,22 +1205,22 @@ final class WebApp
 	}
 
 	/** @var ?array<string,int> model path => trained context, per request */
-	private ?array $modelCtx = null;
+	private ?array $model_ctx = null;
 
 	/** @return array<string,int> */
 	private function modelCtx(): array
 	{
-		if ($this->modelCtx === null) {
-			$this->modelCtx = [];
+		if ($this->model_ctx === null) {
+			$this->model_ctx = [];
 			try {
 				foreach ($this->app->modelScanner()->scan() as $e) {
-					$this->modelCtx[$e->path] = $e->info?->contextLength() ?? 0;
+					$this->model_ctx[$e->path] = $e->info?->contextLength() ?? 0;
 				}
 			} catch (Throwable) {
 				// scan failure: cells fall back to "model max"
 			}
 		}
-		return $this->modelCtx;
+		return $this->model_ctx;
 	}
 
 	/**
@@ -1261,8 +1261,8 @@ final class WebApp
 						continue;
 					}
 					$bytes = 0;
-					foreach (Allocation::fromArray($i->allocation)->perDevice as $devId => $b) {
-						if ($topo->budgetId((string)$devId) === $d->id) {
+					foreach (Allocation::fromArray($i->allocation)->per_device as $dev_id => $b) {
+						if ($topo->budgetId((string)$dev_id) === $d->id) {
 							$bytes += (int)$b;
 						}
 					}
@@ -1270,22 +1270,22 @@ final class WebApp
 						continue;
 					}
 					$est  += $bytes;
-					$pct   = min(100, $d->totalBytes > 0 ? round($bytes / $d->totalBytes * 100, 2) : 0);
+					$pct   = min(100, $d->total_bytes > 0 ? round($bytes / $d->total_bytes * 100, 2) : 0);
 					$segs .= '<div class="segment' . ($i->status === Instance::LOADING ? ' loading' : '')
 						. '" style="width:' . $pct . '%" title="'
 						. Html::e($i->preset_id . ': ' . Format::gb($bytes) . ' GB (est.)') . '">'
 						. Html::e($i->preset_id) . '</div>';
 				}
-				$used     = max(0, $d->totalBytes - $d->availableBytes);
-				$otherPct = $d->totalBytes > 0 ? max(0, round(($used - min($used, $est)) / $d->totalBytes * 100, 2)) : 0;
-				$freePct  = $d->totalBytes > 0 ? max(0, round($d->availableBytes / $d->totalBytes * 100, 2)) : 0;
+				$used     = max(0, $d->total_bytes - $d->available_bytes);
+				$other_pct = $d->total_bytes > 0 ? max(0, round(($used - min($used, $est)) / $d->total_bytes * 100, 2)) : 0;
+				$free_pct  = $d->total_bytes > 0 ? max(0, round($d->available_bytes / $d->total_bytes * 100, 2)) : 0;
 				$mem .= '<tr><td>' . Html::e($topo->label($d->id)) . '</td>'
-					. '<td class="num">' . Format::gb($d->totalBytes) . '</td>'
+					. '<td class="num">' . Format::gb($d->total_bytes) . '</td>'
 					. '<td class="num">' . Format::gb($used) . '</td>'
-					. '<td class="num">' . Format::gb($d->availableBytes) . '</td>'
+					. '<td class="num">' . Format::gb($d->available_bytes) . '</td>'
 					. '<td><div class="membar">' . $segs
-					. '<div class="segment gtheld" style="width:' . $otherPct . '%" title="other / not attributed to a running preset"></div>'
-					. '<div class="segment free" style="width:' . $freePct . '%"></div></div></td></tr>';
+					. '<div class="segment gtheld" style="width:' . $other_pct . '%" title="other / not attributed to a running preset"></div>'
+					. '<div class="segment free" style="width:' . $free_pct . '%"></div></div></td></tr>';
 			}
 			return $mem . '</table>';
 		} catch (Throwable $e) {
@@ -1315,8 +1315,8 @@ final class WebApp
 				if ($d->id !== 'cpu') {
 					continue;
 				}
-				$used = max(0, $d->totalBytes - $d->availableBytes);
-				$parts[] = 'RAM ' . Format::gb($used) . '/' . Format::gb($d->totalBytes) . ' GB';
+				$used = max(0, $d->total_bytes - $d->available_bytes);
+				$parts[] = 'RAM ' . Format::gb($used) . '/' . Format::gb($d->total_bytes) . ' GB';
 			}
 		} catch (Throwable) {
 			// probe failure: summary keeps host + count only

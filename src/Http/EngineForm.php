@@ -12,11 +12,11 @@ final class EngineForm
 {
 	/**
 	 * @param array<string,string> $errors
-	 * @param ?array{source:string,version:string,captured_at:string} $helpInfo what help text the engine currently has
+	 * @param ?array{source:string,version:string,captured_at:string} $help_info what help text the engine currently has
 	 */
-	public static function render(Engine $e, bool $isNew, array $errors = [], ?array $helpInfo = null, bool $reloadHelp = false): string
+	public static function render(Engine $e, bool $is_new, array $errors = [], ?array $help_info = null, bool $reload_help = false): string
 	{
-		$action = $isNew ? '/engines/new' : '/engines/' . Html::e($e->id) . '/edit';
+		$action = $is_new ? '/engines/new' : '/engines/' . Html::e($e->id) . '/edit';
 
 		$out = '';
 		if ($errors !== []) {
@@ -28,11 +28,11 @@ final class EngineForm
 		}
 
 		$out .= '<form method="post" action="' . $action . '">';
-		$out .= self::row('id', 'ID', self::input('id', $e->id, ['required', 'pattern' => '(?!\.)(?!.*\.\.)[A-Za-z0-9_.-]+(?&lt;!\.)', 'readonly' => !$isNew]), self::err($errors, 'id'));
+		$out .= self::row('id', 'ID', self::input('id', $e->id, ['required', 'pattern' => '(?!\.)(?!.*\.\.)[A-Za-z0-9_.-]+(?&lt;!\.)', 'readonly' => !$is_new]), self::err($errors, 'id'));
 		$out .= self::row('name', 'Name', self::input('name', $e->name, ['required']), self::err($errors, 'name'));
 		$out .= self::row('binary_path_default', 'Binary path', self::input('binary_path_default', $e->binary_path_default, ['required', 'placeholder' => '/path/to/llama-server', 'id' => 'binary-path', 'data-binary-check' => '1', 'data-disables' => 'reload-help']) . self::binaryMsg($e->binary_path_default), self::err($errors, 'binary_path_default'));
-		$binaryProblem = BinaryCheck::problem($e->binary_path_default) !== null || trim($e->binary_path_default) === '';
-		$out .= self::row('reload_help', 'Help text', self::helpControl($helpInfo, $binaryProblem, $reloadHelp), '');
+		$binary_problem = BinaryCheck::problem($e->binary_path_default) !== null || trim($e->binary_path_default) === '';
+		$out .= self::row('reload_help', 'Help text', self::helpControl($help_info, $binary_problem, $reload_help), '');
 		$out .= self::row('model_dir', 'Model directory', self::input('model_dir', $e->model_dir, ['placeholder' => 'directory scanned for .gguf models']), self::err($errors, 'model_dir'));
 		$out .= self::row('extra_flags', 'Extra flags', self::input('extra_flags', $e->extra_flags, ['placeholder' => 'e.g. --verbose']) . ' <span class="default">added to every preset on this engine, before the preset\'s own extra flags. --host and --port are not allowed.</span>', self::err($errors, 'extra_flags'));
 		$out .= self::row('host', 'Host', self::input('host', $e->host, ['required']), self::err($errors, 'host'));
@@ -40,7 +40,7 @@ final class EngineForm
 		$out .= self::row('port_max', 'Port range (max)', self::input('port_max', (string)$e->port_range->max, ['type' => 'number']), '');
 
 		$out .= '<p class="form-actions"><button type="submit" class="primary">'
-			. ($isNew ? 'Create engine' : 'Save') . '</button>'
+			. ($is_new ? 'Create engine' : 'Save') . '</button>'
 			. ' <a class="btn" href="/engines">Cancel</a></p>';
 		$out .= '</form>';
 		return $out;
@@ -90,10 +90,10 @@ final class EngineForm
 
 	private static function row(string $name, string $label, string $control, string $error): string
 	{
-		$errHtml = $error !== '' ? '<div class="field-error">⚠ <strong>' . Html::e($error) . '</strong></div>' : '';
+		$err_html = $error !== '' ? '<div class="field-error">⚠ <strong>' . Html::e($error) . '</strong></div>' : '';
 		return '<div class="field-row">'
 			. '<label class="field-label">' . Html::e($label) . '</label>'
-			. '<div class="control">' . $control . $errHtml . '</div></div>';
+			. '<div class="control">' . $control . $err_html . '</div></div>';
 	}
 
 	/** @param array<string,string|bool> $attrs */

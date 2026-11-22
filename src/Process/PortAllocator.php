@@ -47,11 +47,11 @@ final class PortAllocator
 		throw new RuntimeException(sprintf('No free port in range %d-%d', $range->min, $range->max));
 	}
 
-	/** Is $port the assigned_port of a preset other than $exceptId? */
-	private function claimedByOther(int $port, string $exceptId): bool
+	/** Is $port the assigned_port of a preset other than $except_id? */
+	private function claimedByOther(int $port, string $except_id): bool
 	{
 		foreach ($this->presets->loadAll() as $p) {
-			if ($p->id !== $exceptId && $p->assigned_port === $port) {
+			if ($p->id !== $except_id && $p->assigned_port === $port) {
 				return true;
 			}
 		}

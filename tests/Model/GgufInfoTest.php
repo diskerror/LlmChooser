@@ -160,5 +160,9 @@ class GgufInfoTest extends TestCase
 		// old cache entries without the key must not crash
 		$old = GgufInfo::fromArray(['version' => 3, 'tensor_count' => 0, 'metadata' => []]);
 		$this->assertSame([], $old->tensors);
+		// entries written while toArray() emitted camelCase keys
+		$camel = GgufInfo::fromArray(['version' => 3, 'tensorCount' => 7, 'metadata' => []]);
+		$this->assertSame(7, $camel->tensor_count);
+		$this->assertSame(1, GgufInfo::fromArray($i->toArray())->tensor_count);
 	}
 }

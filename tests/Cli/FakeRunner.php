@@ -15,7 +15,7 @@ final class FakeRunner extends CommandRunner
     /** @var list<list<string>> */
     public array $calls = [];
     public bool $root = true;
-    public bool $hasSystemctl = true;
+    public bool $has_systemctl = true;
     /** @var list<string> argv[1] values that should return exit 1 */
     public array $fail = [];
 
@@ -29,7 +29,7 @@ final class FakeRunner extends CommandRunner
 
     public function exists(string $program): bool
     {
-        return $this->hasSystemctl;
+        return $this->has_systemctl;
     }
 
     public function isRoot(): bool

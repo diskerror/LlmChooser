@@ -75,11 +75,11 @@ class CliTest extends TestCase
         $this->runner = new FakeRunner();
     }
 
-    private function makeApp(float $availableGb): App
+    private function makeApp(float $available_gb): App
     {
         $g = 1024 ** 3;
         $topo = new MemoryTopology([
-            new Device('cpu', Device::KIND_RAM, 100 * $g, (int)($availableGb * $g)),
+            new Device('cpu', Device::KIND_RAM, 100 * $g, (int)($available_gb * $g)),
         ]);
         return new App($this->dir, new FixedTopologyProbe($topo));
     }
@@ -91,8 +91,8 @@ class CliTest extends TestCase
             $app,
             new Output($this->o, $this->e),
             $this->runner,
-            unitDir: $this->dir . '/units',
-            phpBinary: '/usr/bin/php',
+            unit_dir: $this->dir . '/units',
+            php_binary: '/usr/bin/php',
         ));
     }
 
@@ -274,7 +274,7 @@ class CliTest extends TestCase
 
     public function test_set_startup_without_systemd(): void
     {
-        $this->runner->hasSystemctl = false;
+        $this->runner->has_systemctl = false;
         [$rc, , $err] = $this->cliRun(['set-startup', 'p1']);
         $this->assertSame(1, $rc);
         $this->assertStringContainsString('systemd not found', $err);
@@ -419,9 +419,9 @@ class CliTest extends TestCase
     // ---- Phase 9: help-drift ----
 
     /** @return array{0:int,1:string,2:string} */
-    private function driftRun(string $capturedPath, array $args): array
+    private function driftRun(string $captured_path, array $args): array
     {
-        $cli = new Cli($this->app, new Output($this->o, $this->e), null, $capturedPath);
+        $cli = new Cli($this->app, new Output($this->o, $this->e), null, $captured_path);
         $rc  = $cli->run($args);
         return [$rc, $this->out(), $this->err()];
     }
@@ -473,18 +473,18 @@ class CliTest extends TestCase
 
     public function test_help_drift_non_executable_path(): void
     {
-        $notABin = $this->dir . '/plain.txt';
-        file_put_contents($notABin, 'hello');
-        [$rc, , $err] = $this->driftRun($this->dir . '/captured.txt', ['help-drift', $notABin]);
+        $not_abin = $this->dir . '/plain.txt';
+        file_put_contents($not_abin, 'hello');
+        [$rc, , $err] = $this->driftRun($this->dir . '/captured.txt', ['help-drift', $not_abin]);
         $this->assertSame(1, $rc);
         $this->assertStringContainsString('Not executable', $err);
     }
 
     // ---- help-review ----
 
-    private function reviewRun(string $fieldHelp, array $args): array
+    private function reviewRun(string $field_help, array $args): array
     {
-        $cli = new Cli($this->app, new Output($this->o, $this->e), null, __DIR__ . '/../../docs/llama-server-help.txt', $fieldHelp);
+        $cli = new Cli($this->app, new Output($this->o, $this->e), null, __DIR__ . '/../../docs/llama-server-help.txt', $field_help);
         $rc  = $cli->run($args);
         return [$rc, $this->out(), $this->err()];
     }

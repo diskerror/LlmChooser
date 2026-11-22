@@ -17,15 +17,15 @@ if (getenv('FAKE_IGNORE_TERM') === '1' && function_exists('pcntl_signal')) {
 	pcntl_signal(SIGTERM, SIG_IGN);
 }
 $start  = microtime(true);
-$loadMs = (int)(getenv('FAKE_LOAD_MS') ?: 300);
-$exitMs = getenv('FAKE_EXIT_AFTER_MS');
+$load_ms = (int)(getenv('FAKE_LOAD_MS') ?: 300);
+$exit_ms = getenv('FAKE_EXIT_AFTER_MS');
 $server = stream_socket_server("tcp://{$host}:{$port}", $errno, $errstr);
 if (!$server) {
 	fwrite(STDERR, "bind failed: {$errstr}\n");
 	exit(2);
 }
 while (true) {
-	if ($exitMs !== false && (microtime(true) - $start) * 1000 >= (int)$exitMs) {
+	if ($exit_ms !== false && (microtime(true) - $start) * 1000 >= (int)$exit_ms) {
 		fwrite(STDERR, "fake crash\n");
 		exit(3);
 	}
@@ -43,7 +43,7 @@ while (true) {
 	while (strlen($body) < $len && !feof($conn)) {
 		$body .= fread($conn, $len - strlen($body));
 	}
-	$ready = ((microtime(true) - $start) * 1000) >= $loadMs;
+	$ready = ((microtime(true) - $start) * 1000) >= $load_ms;
 	if (str_starts_with($head, 'GET /health')) {
 		$out  = $ready ? '{"status":"ok"}' : '{"error":{"code":503,"message":"Loading model"}}';
 		$code = $ready ? '200 OK' : '503 Service Unavailable';

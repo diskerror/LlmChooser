@@ -27,23 +27,23 @@ final class PresetForm
 	 * @param list<ModelEntry> $models
 	 * @param array<string,string> $errors field ('args.x' for args) => message
 	 */
-	public static function render(Preset $p, array $models, bool $isNew, array $errors = [], bool $running = false, ?EngineCollection $engines = null, ?int $estimateBytes = null, ?array $engineHelp = null): string
+	public static function render(Preset $p, array $models, bool $is_new, array $errors = [], bool $running = false, ?EngineCollection $engines = null, ?int $estimate_bytes = null, ?array $engine_help = null): string
 	{
-		$action = $isNew ? '/presets/new' : '/presets/' . Html::e($p->id) . '/edit';
+		$action = $is_new ? '/presets/new' : '/presets/' . Html::e($p->id) . '/edit';
 		$help   = FieldHints::load();
-		if ($engineHelp !== null) {
-			$help = FieldHints::withUpstream($help, $engineHelp);
+		if ($engine_help !== null) {
+			$help = FieldHints::withUpstream($help, $engine_help);
 		}
 		$defaults = new Preset();
-		$argDefaults = new PresetArgs();
+		$arg_defaults = new PresetArgs();
 
 		// ctx_size's effective default comes from the selected model, not
 		// llama.cpp (GUI-DESIGN.md §4): show "model: 8192" when the preset
 		// says 0 and the model's GGUF knows.
-		$modelCtx = 0;
+		$model_ctx = 0;
 		foreach ($models as $e) {
 			if ($e->path === $p->model_path) {
-				$modelCtx = $e->info?->contextLength() ?? 0;
+				$model_ctx = $e->info?->contextLength() ?? 0;
 				break;
 			}
 		}
@@ -92,7 +92,7 @@ final class PresetForm
 		$out .= '<details open><summary>General</summary>';
 		$out .= self::fieldRow('enabled', self::checkbox('enabled', (bool)$p->enabled),
 			(bool)$p->enabled, (bool)$defaults->enabled, $help, self::err($errors, 'enabled'));
-		$out .= self::fieldRow('id', self::textInput('id', $p->id, $help, ['required', 'pattern' => '(?!\.)(?!.*\.\.)[A-Za-z0-9_.-]+(?&lt;!\.)', 'readonly' => !$isNew]),
+		$out .= self::fieldRow('id', self::textInput('id', $p->id, $help, ['required', 'pattern' => '(?!\.)(?!.*\.\.)[A-Za-z0-9_.-]+(?&lt;!\.)', 'readonly' => !$is_new]),
 			$p->id, $defaults->id, $help, self::err($errors, 'id'));
 		$out .= self::fieldRow('name', self::textInput('name', $p->name, $help),
 			$p->name, $defaults->name, $help, self::err($errors, 'name'));
@@ -123,7 +123,7 @@ final class PresetForm
 		}
 		$groups = FieldHints::GROUPS;
 		$extra  = [];
-		foreach ($argDefaults->getPublicNames() as $name) {
+		foreach ($arg_defaults->getPublicNames() as $name) {
 			if (!isset($grouped[$name])) {
 				$extra[] = $name;
 			}
@@ -138,14 +138,14 @@ final class PresetForm
 				// Running worst-case RAM for this preset (weights + full-ctx KV
 				// + overhead); app.js refreshes it as the form changes.
 				$suffix = ' — <span id="mem-estimate" data-url="/api/preset-estimate">'
-					. ($estimateBytes !== null ? Html::e(Format::gb($estimateBytes)) . ' GB' : '?') . '</span> estimated';
+					. ($estimate_bytes !== null ? Html::e(Format::gb($estimate_bytes)) . ' GB' : '?') . '</span> estimated';
 			}
 			$out .= '<details><summary>' . Html::e($label) . $suffix . '</summary>';
 			foreach ($names as $name) {
 				$value = $p->args->{$name};
 				$override = '';
-				if ($name === 'ctx_size' && (int)$value === 0 && $modelCtx > 0) {
-					$override = 'default model: ' . $modelCtx;
+				if ($name === 'ctx_size' && (int)$value === 0 && $model_ctx > 0) {
+					$override = 'default model: ' . $model_ctx;
 				}
 				if ($name === 'reasoning_effort' && $family !== null) {
 					$control  = self::familyReasoningControl($value, $family, $help);
@@ -154,14 +154,14 @@ final class PresetForm
 					$control = self::argControl($name, $value, $help);
 				}
 				$out .= self::fieldRow($name, $control,
-					$value, $argDefaults->{$name}, $help, self::err($errors, 'args.' . $name), $override);
+					$value, $arg_defaults->{$name}, $help, self::err($errors, 'args.' . $name), $override);
 			}
 			$out .= '</details>';
 		}
 
 		$out .= '<p class="form-actions"><button type="submit" class="primary">'
-			. ($isNew ? 'Create preset' : 'Save') . '</button>';
-		if (!$isNew && $running) {
+			. ($is_new ? 'Create preset' : 'Save') . '</button>';
+		if (!$is_new && $running) {
 			$out .= ' <button type="submit" name="save_restart" value="1">Save &amp; restart</button>';
 		}
 		$out .= ' <a class="btn" href="/presets">Cancel</a></p>';
@@ -190,7 +190,7 @@ final class PresetForm
 	/**
 	 * One OPNsense-style row: label + ⓘ + non-default dot on the left,
 	 * control + default hint + inline error + hidden help on the right.
-	 * $helpKey indexes field_help.json; $name is the form-visible name.
+	 * $name is the form-visible name and the field_help.json key.
 	 *
 	 * @param array<string,array<string,string>> $help
 	 */
@@ -201,7 +201,7 @@ final class PresetForm
 		mixed $default,
 		array $help,
 		string $error = '',
-		string $defaultOverride = '',
+		string $default_override = '',
 	): string {
 		$entry = $help[$name] ?? null;
 		// An undocumented field must never crash the page, and must never
@@ -213,26 +213,26 @@ final class PresetForm
 		$flag  = $entry['flag'] ?? '';
 		$updef = $entry['upstream_default'] ?? '';
 
-		$nonDefault = $value != $default; // loose: int vs "0" from POST round-trips
-		$dot = $nonDefault ? ' <span class="dot">●</span>' : '';
+		$non_default = $value != $default; // loose: int vs "0" from POST round-trips
+		$dot = $non_default ? ' <span class="dot">●</span>' : '';
 
-		$hint = $defaultOverride;
+		$hint = $default_override;
 		if ($hint === '' && $updef !== '' && $updef !== 'n/a') {
 			$hint = 'default ' . $updef;
 		}
 
 		// Error rows get their help forced open (GUI-DESIGN.md §4).
-		$helpHtml = '<div class="help"' . ($error !== '' ? '' : ' hidden') . '>'
+		$help_html = '<div class="help"' . ($error !== '' ? '' : ' hidden') . '>'
 			. ($flag !== '' && $flag !== '(none)' ? '<code class="flag">' . Html::e($flag) . '</code> ' : '')
 			. ($up !== '' ? '<p class="help-upstream"><span class="help-src">llama.cpp:</span> ' . Html::e($up) . '</p>' : '')
 			. ($notes !== '' ? '<p class="help-notes">' . nl2br(Html::e($notes)) . '</p>' : '')
 			. (!empty($entry['stale']) ? '<p class="help-stale">⚠ llama.cpp\'s text for this option has changed since these notes were reviewed.</p>' : '')
 			. '</div>';
-		$errHtml = $error !== ''
+		$err_html = $error !== ''
 			? '<div class="field-error">⚠ <strong>' . Html::e($error) . '</strong></div>'
 			: '';
 
-		return '<div class="field-row ' . $level . ($nonDefault ? ' non-default' : '') . '">'
+		return '<div class="field-row ' . $level . ($non_default ? ' non-default' : '') . '">'
 			. '<label class="field-label">'
 			. '<button type="button" class="help-toggle" aria-label="Help for ' . Html::e($label) . '">ⓘ</button> '
 			. Html::e($label) . $dot
@@ -240,7 +240,7 @@ final class PresetForm
 			. '<div class="control">'
 			. $control
 			. ($hint !== '' ? ' <span class="default">' . Html::e($hint) . '</span>' : '')
-			. $errHtml . $helpHtml
+			. $err_html . $help_html
 			. '</div></div>';
 	}
 
@@ -326,7 +326,7 @@ final class PresetForm
 		$out   = '<select name="model_path"' . self::title($help, 'model_path') . '>';
 		foreach ($models as $e) {
 			$paths[$e->path] = true;
-			$label           = $e->displayName . ' — ' . Format::humanBytes($e->sizeBytes)
+			$label           = $e->display_name . ' — ' . Format::humanBytes($e->size_bytes)
 				. ($e->ngrams()?->sizeSuffix(Format::humanBytes(...)) ?? '') . ($e->error !== null ? ' [error]' : '');
 			$ctx             = $e->info?->contextLength() ?? 0;
 			$out            .= '<option value="' . Html::e($e->path) . '"'

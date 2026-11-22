@@ -26,37 +26,37 @@ final class AdmissionCheck
 	 */
 	public function check(Allocation $new, array $running, MemoryTopology $topology): AdmissionResult
 	{
-		$runningByBudget = [];
+		$running_by_budget = [];
 		foreach ($running as $alloc) {
-			foreach ($alloc->perDevice as $device => $bytes) {
+			foreach ($alloc->per_device as $device => $bytes) {
 				$budget = $topology->budgetId($device);
-				$runningByBudget[$budget] = ($runningByBudget[$budget] ?? 0) + $bytes;
+				$running_by_budget[$budget] = ($running_by_budget[$budget] ?? 0) + $bytes;
 			}
 		}
 
-		$perBudget = [];
+		$per_budget = [];
 		$fits      = true;
-		foreach ($new->perDevice as $device => $bytes) {
+		foreach ($new->per_device as $device => $bytes) {
 			$budget = $topology->budgetId($device);
-			if (!isset($perBudget[$budget])) {
+			if (!isset($per_budget[$budget])) {
 				$device_available = $topology->devices[$budget] ?? null;
-				$perBudget[$budget] = [
+				$per_budget[$budget] = [
 					'need'      => 0,
-					'already'   => $runningByBudget[$budget] ?? 0,
+					'already'   => $running_by_budget[$budget] ?? 0,
 					// An id we know nothing about gets no budget, so it fails
 					// loudly instead of passing on a guess.
-					'available' => $device_available?->availableBytes ?? 0,
+					'available' => $device_available?->available_bytes ?? 0,
 				];
 			}
-			$perBudget[$budget]['need'] += $bytes;
+			$per_budget[$budget]['need'] += $bytes;
 		}
 
-		foreach ($perBudget as $budget => $row) {
+		foreach ($per_budget as $budget => $row) {
 			if ($row['need'] > $row['available']) {
 				$fits = false;
 			}
 		}
 
-		return new AdmissionResult($fits, $perBudget);
+		return new AdmissionResult($fits, $per_budget);
 	}
 }

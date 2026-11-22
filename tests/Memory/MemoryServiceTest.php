@@ -52,6 +52,6 @@ class MemoryServiceTest extends TestCase
 
         $result = $svc->admit($preset, []);
         $this->assertTrue($result->fits);
-        $this->assertSame(['cpu'], array_keys($result->perBudget));
+        $this->assertSame(['cpu'], array_keys($result->per_budget));
     }
 }

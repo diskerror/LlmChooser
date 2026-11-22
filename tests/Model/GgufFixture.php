@@ -11,17 +11,17 @@ final class GgufFixture
 	/**
 	 * @param list<array{0:string,1:int,2:mixed}> $kv  [key, type, value]
 	 *        For R::T_ARRAY the value is [elementType, list<values>].
-	 * @param int $padBytes extra zero bytes appended (to give the file a size)
+	 * @param int $pad_bytes extra zero bytes appended (to give the file a size)
 	 * @param list<array{0:string,1:list<int>,2:int}> $tensors
 	 *        [name, dims, ggml_type] written as the tensor info section.
 	 */
-	public static function write(string $path, array $kv, int $tensorCount = 0, int $padBytes = 0, int $version = 3, array $tensors = []): void
+	public static function write(string $path, array $kv, int $tensor_count = 0, int $pad_bytes = 0, int $version = 3, array $tensors = []): void
 	{
 		$dir = dirname($path);
 		if (!is_dir($dir)) {
 			mkdir($dir, 0775, true);
 		}
-		$b = 'GGUF' . pack('V', $version) . pack('P', $tensorCount) . pack('P', count($kv));
+		$b = 'GGUF' . pack('V', $version) . pack('P', $tensor_count) . pack('P', count($kv));
 		foreach ($kv as [$key, $type, $value]) {
 			$b .= self::str($key) . pack('V', $type) . self::value($type, $value);
 		}
@@ -32,12 +32,12 @@ final class GgufFixture
 			}
 			$b .= pack('V', $type) . pack('P', 0); // type (uint32 per spec), offset
 		}
-		$b .= str_repeat("\0", $padBytes);
+		$b .= str_repeat("\0", $pad_bytes);
 		file_put_contents($path, $b);
 	}
 
 	/** A minimal plausible llama-style model header. */
-	public static function model(string $path, string $arch = 'llama', int $padBytes = 1000, array $extra = []): void
+	public static function model(string $path, string $arch = 'llama', int $pad_bytes = 1000, array $extra = []): void
 	{
 		$kv = array_merge([
 			['general.architecture', R::T_STRING, $arch],
@@ -48,7 +48,7 @@ final class GgufFixture
 			["{$arch}.attention.head_count", R::T_UINT32, 32],
 			["{$arch}.attention.head_count_kv", R::T_UINT32, 8],
 		], $extra);
-		self::write($path, $kv, 0, $padBytes);
+		self::write($path, $kv, 0, $pad_bytes);
 	}
 
 	private static function str(string $s): string
@@ -72,11 +72,11 @@ final class GgufFixture
 		};
 	}
 
-	private static function arr(int $elemType, array $values): string
+	private static function arr(int $elem_type, array $values): string
 	{
-		$b = pack('V', $elemType) . pack('P', count($values));
+		$b = pack('V', $elem_type) . pack('P', count($values));
 		foreach ($values as $v) {
-			$b .= self::value($elemType, $v);
+			$b .= self::value($elem_type, $v);
 		}
 		return $b;
 	}

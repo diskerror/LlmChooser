@@ -30,21 +30,21 @@ final class ProcessManager
 		private readonly EngineRepository $engines,
 		private readonly RuntimeState $state,
 		private readonly MemoryService $memory,
-		private readonly string $logDir,
+		private readonly string $log_dir,
 		private readonly CommandBuilder $builder = new CommandBuilder(),
 		private readonly ProcessControl $proc = new ProcessControl(),
 		private readonly HealthChecker $health = new HealthChecker(),
-		private readonly int $stopTimeoutSeconds = 15,
-		private readonly int $releaseTimeoutSeconds = 15,
+		private readonly int $stop_timeout_seconds = 15,
+		private readonly int $release_timeout_seconds = 15,
 	) {}
 
-	public function start(string $presetId, bool $force = false): Instance
+	public function start(string $preset_id, bool $force = false): Instance
 	{
 		$this->reconcile();
 
 		// Already up? Starting twice is a no-op, not an error. An instance in
 		// error state does not count: it gets replaced.
-		$existing = $this->state->get($presetId);
+		$existing = $this->state->get($preset_id);
 		if ($existing !== null && $existing->isLive()) {
 			return $existing;
 		}
@@ -53,12 +53,12 @@ final class ProcessManager
 		// after 600s" only gives up waiting; it does not kill the server).
 		// Replacing its state entry would orphan that process, so stop it.
 		if ($existing !== null) {
-			$this->stop($presetId);
+			$this->stop($preset_id);
 		}
 
-		$preset = $this->presets->load($presetId);
+		$preset = $this->presets->load($preset_id);
 		if (!$preset->enabled) {
-			throw new RuntimeException("Preset '{$presetId}' is disabled. Enable it first.");
+			throw new RuntimeException("Preset '{$preset_id}' is disabled. Enable it first.");
 		}
 		$engine = $this->engines->load($preset->engine_id);
 
@@ -86,18 +86,18 @@ final class ProcessManager
 
 		$cmd = $this->builder->build($preset, $engine, $port);
 
-		if (!is_dir($this->logDir) && !mkdir($this->logDir, 0775, true) && !is_dir($this->logDir)) {
-			throw new RuntimeException("Cannot create log directory: {$this->logDir}");
+		if (!is_dir($this->log_dir) && !mkdir($this->log_dir, 0775, true) && !is_dir($this->log_dir)) {
+			throw new RuntimeException("Cannot create log directory: {$this->log_dir}");
 		}
-		$logFile = $this->logDir . '/' . $presetId . '-' . date('Ymd-His') . '.log';
-		file_put_contents($logFile, '# ' . date('c') . ' ' . $cmd->toString() . "\n");
+		$log_file = $this->log_dir . '/' . $preset_id . '-' . date('Ymd-His') . '.log';
+		file_put_contents($log_file, '# ' . date('c') . ' ' . $cmd->toString() . "\n");
 
 		$argv = self::detachedArgv($cmd->argv);
 		$env  = array_merge(getenv(), $cmd->env);
 		$proc = proc_open($argv, [
 			0 => ['file', '/dev/null', 'r'],
-			1 => ['file', $logFile, 'a'],
-			2 => ['file', $logFile, 'a'],
+			1 => ['file', $log_file, 'a'],
+			2 => ['file', $log_file, 'a'],
 		], $pipes, null, $env);
 
 		if ($proc === false) {
@@ -106,22 +106,22 @@ final class ProcessManager
 		$pid = proc_get_status($proc)['pid'];
 		// Deliberately no proc_close(): it would block until the server exits.
 
-		$this->state->update(static function ($c) use ($presetId, $pid, $engine, $port, $logFile, $cmd, $allocation): void {
-			$c[$presetId] = new Instance([
-				'preset_id'  => $presetId,
+		$this->state->update(static function ($c) use ($preset_id, $pid, $engine, $port, $log_file, $cmd, $allocation): void {
+			$c[$preset_id] = new Instance([
+				'preset_id'  => $preset_id,
 				'pid'        => $pid,
 				'host'       => $engine->host,
 				'port'       => $port,
 				'started_at' => time(),
 				'status'     => Instance::LOADING,
-				'log_file'   => $logFile,
+				'log_file'   => $log_file,
 				'command'    => $cmd->toString(),
 				'allocation' => $allocation->toArray(),
 				'last_used'  => time(),
 			]);
 		});
 
-		return $this->state->get($presetId);
+		return $this->state->get($preset_id);
 	}
 
 	/**
@@ -159,7 +159,7 @@ final class ProcessManager
 	 *
 	 * @return list<string> ids that were stopped to make room
 	 */
-	public function startEvicting(string $presetId, ?Instance &$started = null): array
+	public function startEvicting(string $preset_id, ?Instance &$started = null): array
 	{
 		$evicted = [];
 		while (true) {
@@ -168,13 +168,13 @@ final class ProcessManager
 				// the next victim: stale "available" readings would otherwise
 				// evict more instances than the freed memory actually needs.
 				$started = $evicted === []
-					? $this->start($presetId)
-					: $this->startAllowingRelease($presetId);
+					? $this->start($preset_id)
+					: $this->startAllowingRelease($preset_id);
 				return $evicted;
 			} catch (AdmissionException $e) {
 				$victims = [];
 				foreach ($this->state->all() as $i) {
-					if ($i->preset_id !== $presetId && $i->isLive()) {
+					if ($i->preset_id !== $preset_id && $i->isLive()) {
 						$victims[] = $i;
 					}
 				}
@@ -213,47 +213,47 @@ final class ProcessManager
 	}
 
 	/** Block until the instance is ready, errors, or the timeout passes. */
-	public function waitUntilReady(string $presetId, int $timeoutSeconds = 600): Instance
+	public function waitUntilReady(string $preset_id, int $timeout_seconds = 600): Instance
 	{
-		$deadline = microtime(true) + $timeoutSeconds;
+		$deadline = microtime(true) + $timeout_seconds;
 		while (true) {
 			$this->refresh();
-			$i = $this->state->get($presetId);
+			$i = $this->state->get($preset_id);
 			if ($i === null) {
-				throw new RuntimeException("No instance for preset {$presetId}");
+				throw new RuntimeException("No instance for preset {$preset_id}");
 			}
 			if (in_array($i->status, [Instance::READY, Instance::ERROR], true)) {
 				return $i;
 			}
 			if (microtime(true) >= $deadline) {
-				$this->state->update(static function ($c) use ($presetId, $timeoutSeconds): void {
-					$i = $c[$presetId];
+				$this->state->update(static function ($c) use ($preset_id, $timeout_seconds): void {
+					$i = $c[$preset_id];
 					$i->status  = Instance::ERROR;
-					$i->message = "not ready after {$timeoutSeconds}s";
+					$i->message = "not ready after {$timeout_seconds}s";
 				});
-				return $this->state->get($presetId);
+				return $this->state->get($preset_id);
 			}
 			usleep(500000);
 		}
 	}
 
-	public function stop(string $presetId): void
+	public function stop(string $preset_id): void
 	{
-		$i = $this->state->get($presetId);
+		$i = $this->state->get($preset_id);
 		if ($i === null) {
 			return;
 		}
 
 		if ($this->isOurs($i)) {
 			$this->proc->signal($i->pid, 'TERM');
-			if ($this->waitWhileAlive($i->pid, $this->stopTimeoutSeconds)) {
+			if ($this->waitWhileAlive($i->pid, $this->stop_timeout_seconds)) {
 				$this->proc->signal($i->pid, 'KILL');
 				$this->waitWhileAlive($i->pid, 2);
 			}
 		}
 
-		$this->state->update(static function ($c) use ($presetId): void {
-			unset($c[$presetId]);
+		$this->state->update(static function ($c) use ($preset_id): void {
+			unset($c[$preset_id]);
 		});
 	}
 
@@ -264,22 +264,22 @@ final class ProcessManager
 	 * held and refuse a restart that fits. Retry admission briefly before
 	 * giving up; a genuine over-commit still fails, just later.
 	 */
-	public function restart(string $presetId, bool $force = false): Instance
+	public function restart(string $preset_id, bool $force = false): Instance
 	{
-		$this->stop($presetId);
-		return $this->startAllowingRelease($presetId, $force);
+		$this->stop($preset_id);
+		return $this->startAllowingRelease($preset_id, $force);
 	}
 
 	/**
 	 * start() with a bounded grace period for driver memory release: on
 	 * admission refusal, re-check every second up to releaseTimeoutSeconds.
 	 */
-	private function startAllowingRelease(string $presetId, bool $force = false): Instance
+	private function startAllowingRelease(string $preset_id, bool $force = false): Instance
 	{
-		$deadline = microtime(true) + $this->releaseTimeoutSeconds;
+		$deadline = microtime(true) + $this->release_timeout_seconds;
 		while (true) {
 			try {
-				return $this->start($presetId, $force);
+				return $this->start($preset_id, $force);
 			} catch (AdmissionException $e) {
 				if (microtime(true) >= $deadline) {
 					throw $e;
@@ -372,7 +372,7 @@ final class ProcessManager
 				continue;
 			}
 			$this->proc->signal($o['pid'], 'TERM');
-			if ($this->waitWhileAlive($o['pid'], $this->stopTimeoutSeconds)) {
+			if ($this->waitWhileAlive($o['pid'], $this->stop_timeout_seconds)) {
 				$this->proc->signal($o['pid'], 'KILL');
 			}
 			$n++;

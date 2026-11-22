@@ -31,10 +31,10 @@ final class RuntimeState
 		}
 	}
 
-	public function get(string $presetId): ?Instance
+	public function get(string $preset_id): ?Instance
 	{
 		$all = $this->all();
-		return isset($all[$presetId]) ? $all[$presetId] : null;
+		return isset($all[$preset_id]) ? $all[$preset_id] : null;
 	}
 
 	/**

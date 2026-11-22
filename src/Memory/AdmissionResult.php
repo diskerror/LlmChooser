@@ -7,19 +7,19 @@ namespace LlmChooser\Memory;
 final class AdmissionResult
 {
 	/**
-	 * @param array<string, array{need:int, already:int, available:int}> $perBudget
+	 * @param array<string, array{need:int, already:int, available:int}> $per_budget
 	 *        keyed by budget device id (after unified aliasing)
 	 */
 	public function __construct(
 		public readonly bool $fits,
-		public readonly array $perBudget,
+		public readonly array $per_budget,
 	) {}
 
 	/** Human-readable explanation, one line per budget device. */
 	public function message(): string
 	{
 		$lines = [];
-		foreach ($this->perBudget as $id => $r) {
+		foreach ($this->per_budget as $id => $r) {
 			$ok      = $r['need'] <= $r['available'];
 			$lines[] = sprintf(
 				'%s %s: need %.1f GB + already running %.1f GB vs available %.1f GB',

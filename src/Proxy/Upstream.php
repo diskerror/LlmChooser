@@ -19,7 +19,7 @@ final class Upstream
 	private const DROP_RESPONSE = ['transfer-encoding', 'connection', 'content-length', 'keep-alive', 'date', 'server'];
 
 	/** @return array{0:bool,1:string} [ok, curl error] */
-	public function forward(Request $r, string $host, int $port, string $pathAndQuery, string $body, Emitter $out): array
+	public function forward(Request $r, string $host, int $port, string $path_and_query, string $body, Emitter $out): array
 	{
 		$headers = [];
 		foreach ($r->headers as $k => $v) {
@@ -61,7 +61,7 @@ final class Upstream
 			$opts[CURLOPT_POSTFIELDS] = $body;
 		}
 		try {
-			(new Curl("http://{$host}:{$port}{$pathAndQuery}", $opts))->exec();
+			(new Curl("http://{$host}:{$port}{$path_and_query}", $opts))->exec();
 		}
 		catch (RuntimeException $e) {
 			return [false, $e->getMessage()];

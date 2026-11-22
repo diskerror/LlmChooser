@@ -52,8 +52,8 @@ final class NgramTableTest extends TestCase
 		file_put_contents($this->dir . '/shared/ngrams.gguf', str_repeat('x', 1234));
 		$t = NgramTable::of($this->dir . '/model/trunk.gguf', self::info('qwen4exp', [NgramTable::FILE_KEY => '../shared/ngrams.gguf']));
 		$this->assertFalse($t->embedded);
-		$this->assertSame($this->dir . '/model/../shared/ngrams.gguf', $t->filePath);
-		$this->assertSame(1234, $t->fileBytes);
+		$this->assertSame($this->dir . '/model/../shared/ngrams.gguf', $t->file_path);
+		$this->assertSame(1234, $t->file_bytes);
 		$this->assertSame(' + 0.00 n-grams', $t->sizeSuffix(Format::gbNumber(...)));
 		$this->assertStringStartsWith('+ ', $t->note());
 	}
@@ -74,7 +74,7 @@ final class NgramTableTest extends TestCase
 	public function test_missing_separate_file_is_flagged(): void
 	{
 		$t = NgramTable::of($this->dir . '/model/trunk.gguf', self::info('qwen4exp', [NgramTable::FILE_KEY => '../shared/nope.gguf']));
-		$this->assertNull($t->fileBytes);
+		$this->assertNull($t->file_bytes);
 		$this->assertSame(' + n-grams (missing)', $t->sizeSuffix(Format::gbNumber(...)));
 	}
 }

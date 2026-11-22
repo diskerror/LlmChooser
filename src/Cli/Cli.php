@@ -48,8 +48,8 @@ final class Cli
 		private readonly App $app,
 		private readonly Output $out = new Output(),
 		private readonly ?StartupManager $startup = null,
-		private readonly string $capturedHelpPath = __DIR__ . '/../../docs/llama-server-help.txt',
-		private readonly string $fieldHelpPath = FieldHints::HELP_FILE,
+		private readonly string $captured_help_path = __DIR__ . '/../../docs/llama-server-help.txt',
+		private readonly string $field_help_path = FieldHints::HELP_FILE,
 	) {}
 
 	/** @param list<string> $args  arguments AFTER the script name. Returns exit code. */
@@ -251,9 +251,9 @@ final class Cli
 			$this->out->error("Not executable: {$binary}");
 			return 1;
 		}
-		$captured = @file_get_contents($this->capturedHelpPath);
+		$captured = @file_get_contents($this->captured_help_path);
 		if ($captured === false) {
-			$this->out->error("No captured copy at {$this->capturedHelpPath}. Nothing to diff against.");
+			$this->out->error("No captured copy at {$this->captured_help_path}. Nothing to diff against.");
 			return 1;
 		}
 
@@ -293,13 +293,13 @@ final class Cli
 		$entries = $src['entries'];
 		$index   = HelpParser::aliasIndex($entries);
 		try {
-			$fields = jsonDecode(@file_get_contents($this->fieldHelpPath));
+			$fields = jsonDecode(@file_get_contents($this->field_help_path));
 		}
 		catch (JsonException) {
 			$fields = null;
 		}
 		if (!is_array($fields)) {
-			$this->out->error("Cannot read {$this->fieldHelpPath}");
+			$this->out->error("Cannot read {$this->field_help_path}");
 			return 1;
 		}
 
@@ -341,8 +341,8 @@ final class Cli
 				$fields[$name]['reviewed'] = $h;
 			}
 			$json = jsonEncode($fields, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
-			if (file_put_contents($this->fieldHelpPath, $json) === false) {
-				$this->out->error("Cannot write {$this->fieldHelpPath}");
+			if (file_put_contents($this->field_help_path, $json) === false) {
+				$this->out->error("Cannot write {$this->field_help_path}");
 				return 1;
 			}
 			$this->out->line('Stamped ' . count($changed) . ' field(s) as reviewed.');
@@ -476,12 +476,12 @@ final class Cli
 		}
 	}
 
-	private function listPresets(bool $onlyEnabled = false): int
+	private function listPresets(bool $only_enabled = false): int
 	{
 		$presets = $this->app->presets->loadAll();
 		$rows = [];
 		foreach ($presets as $p) {
-			if ($onlyEnabled && !$p->enabled) {
+			if ($only_enabled && !$p->enabled) {
 				continue;
 			}
 			$rows[] = [
@@ -510,11 +510,11 @@ final class Cli
 			}
 			$note = $e->error ?? '';
 			if ($note === '' && $e->isSharded()) {
-				$note = count($e->shardPaths) . ' shards';
+				$note = count($e->shard_paths) . ' shards';
 			}
 			$rows[] = [
-				$e->displayName,
-				Format::humanBytes($e->sizeBytes) . ($ngrams?->sizeSuffix(Format::humanBytes(...)) ?? ''),
+				$e->display_name,
+				Format::humanBytes($e->size_bytes) . ($ngrams?->sizeSuffix(Format::humanBytes(...)) ?? ''),
 				$e->info?->architecture() ?? '-',
 				(string)($e->info?->contextLength() ?? '-'),
 				$note,
@@ -561,6 +561,6 @@ final class Cli
 		if ($allocation === []) {
 			return null;
 		}
-		return array_sum(Allocation::fromArray($allocation)->perDevice);
+		return array_sum(Allocation::fromArray($allocation)->per_device);
 	}
 }

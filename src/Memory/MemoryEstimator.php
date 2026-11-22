@@ -69,20 +69,20 @@ final class MemoryEstimator
 	 * interval-th layer, same correction as breakdown(). MLA-style models
 	 * where K/V dims diverge sum both sides.
 	 */
-	public function kvBytesPer1k(GgufInfo $info, string $cacheType): int
+	public function kvBytesPer1k(GgufInfo $info, string $cache_type): int
 	{
 		$blocks = $info->blockCount();
 		if ($blocks <= 0) {
 			return 0;
 		}
 		$interval = (int)$info->archGet('full_attention_interval', 0);
-		$kvLayers = $interval > 1 ? intdiv($blocks, $interval) : $blocks;
+		$kv_layers = $interval > 1 ? intdiv($blocks, $interval) : $blocks;
 
-		$b = self::KV_BYTES[strtolower($cacheType)] ?? 2.0;
-		$kDim = $info->headCountKv() * $info->keyLength();
-		$vDim = $info->headCountKv() * $info->valueLength();
+		$b = self::KV_BYTES[strtolower($cache_type)] ?? 2.0;
+		$k_dim = $info->headCountKv() * $info->keyLength();
+		$v_dim = $info->headCountKv() * $info->valueLength();
 
-		return (int)ceil(1000 * $kvLayers * ($kDim + $vDim) * $b);
+		return (int)ceil(1000 * $kv_layers * ($k_dim + $v_dim) * $b);
 	}
 
 	/**
@@ -99,26 +99,26 @@ final class MemoryEstimator
 		$bk     = self::KV_BYTES[strtolower($preset->args->cache_type_k)] ?? 2.0;
 		$bv     = self::KV_BYTES[strtolower($preset->args->cache_type_v)] ?? 2.0;
 		$kv = $indexer = $recurrent = 0;
-		$kvLayers = 0;
+		$kv_layers = 0;
 		if ($blocks > 0) {
 			// Hybrid attention: only every interval-th layer keeps KV.
 			$interval = (int)$info->archGet('full_attention_interval', 0);
-			$kvLayers = $interval > 1 ? intdiv($blocks, $interval) : $blocks;
+			$kv_layers = $interval > 1 ? intdiv($blocks, $interval) : $blocks;
 
-			$kDim = $info->headCountKv() * $info->keyLength();
-			$vDim = $info->headCountKv() * $info->valueLength();
+			$k_dim = $info->headCountKv() * $info->keyLength();
+			$v_dim = $info->headCountKv() * $info->valueLength();
 
 			// NOT multiplied by parallel: slots share the total context.
-			$kv = (int)ceil($kvLayers * $ctx * ($kDim * $bk + $vDim * $bv));
+			$kv = (int)ceil($kv_layers * $ctx * ($k_dim * $bk + $v_dim * $bv));
 
 			// Compressed-attention models (compress_ratios) keep a second,
 			// per-ctx cache on the compressed layers: indexer-K plus V, one
 			// head each. Verified exact against llama.cpp's log (4608 MiB).
 			$ratios   = $info->archGet('attention.compress_ratios');
-			$idxKey   = (int)$info->archGet('attention.indexer.key_length', 0);
-			if (is_array($ratios) && $idxKey > 0) {
+			$idx_key   = (int)$info->archGet('attention.indexer.key_length', 0);
+			if (is_array($ratios) && $idx_key > 0) {
 				$compressed = count(array_filter($ratios, static fn($r): bool => (int)$r > 0));
-				$indexer    = (int)ceil($compressed * $ctx * ($idxKey * $bk + $info->valueLength() * $bv));
+				$indexer    = (int)ceil($compressed * $ctx * ($idx_key * $bk + $info->valueLength() * $bv));
 			}
 
 			// Recurrent (SSM) layers: fp32 conv + state per sequence, plus
@@ -128,9 +128,9 @@ final class MemoryEstimator
 			if ($inner > 0 && $state > 0) {
 				$groups  = (int)$info->archGet('ssm.group_count', 0);
 				$kernel  = (int)$info->archGet('ssm.conv_kernel', 4);
-				$perSeq  = 4 * ($inner * $state + max(0, $kernel - 1) * ($inner + 2 * $groups * $state));
+				$per_seq  = 4 * ($inner * $state + max(0, $kernel - 1) * ($inner + 2 * $groups * $state));
 				$extra   = str_contains($preset->args->spec_type, 'mtp') ? $preset->args->spec_draft_n_max : 0;
-				$recurrent = (int)ceil(($blocks - $kvLayers) * $perSeq * (max(1, $preset->args->parallel) + $extra));
+				$recurrent = (int)ceil(($blocks - $kv_layers) * $per_seq * (max(1, $preset->args->parallel) + $extra));
 			}
 		}
 
@@ -143,7 +143,7 @@ final class MemoryEstimator
 		// Draft model: its own context at the same n_ctx, f16 KV (llama-server
 		// default for the draft), plus its compute buffer. An MTP head has
 		// nextn_predict_layers layers; a normal draft model all of its own.
-		$draftKv = $draftCompute = 0;
+		$draft_kv = $draft_compute = 0;
 		if ($draft > 0) {
 			$d = null;
 			try {
@@ -157,9 +157,9 @@ final class MemoryEstimator
 					$layers = $di > 1 ? intdiv($d->blockCount(), $di) : $d->blockCount();
 				}
 				$dctx    = $ctx > 0 ? $ctx : $d->contextLength();
-				$draftKv = (int)ceil($layers * $dctx * ($d->headCountKv() * ($d->keyLength() + $d->valueLength())) * 2.0);
+				$draft_kv = (int)ceil($layers * $dctx * ($d->headCountKv() * ($d->keyLength() + $d->valueLength())) * 2.0);
 			}
-			$draftCompute = $ub * self::DRAFT_COMPUTE_BYTES_PER_UBATCH_TOKEN;
+			$draft_compute = $ub * self::DRAFT_COMPUTE_BYTES_PER_UBATCH_TOKEN;
 		}
 
 		return [
@@ -170,8 +170,8 @@ final class MemoryEstimator
 			'overhead' => $overhead,
 			'mmproj'   => $mmproj,
 			'draft'    => $draft,
-			'draft_kv' => $draftKv,
-			'draft_compute' => $draftCompute,
+			'draft_kv' => $draft_kv,
+			'draft_compute' => $draft_compute,
 		];
 	}
 
@@ -190,18 +190,18 @@ final class MemoryEstimator
 			return ['cpu' => $total];
 		}
 
-		$gpuPart = (int)round($total * $f);
-		$cpuPart = $total - $gpuPart;
+		$gpu_part = (int)round($total * $f);
+		$cpu_part = $total - $gpu_part;
 
-		$perDevice = $gpuPart > 0
-			? $this->splitGpus($preset, $topology, $gpus, $gpuPart)
+		$per_device = $gpu_part > 0
+			? $this->splitGpus($preset, $topology, $gpus, $gpu_part)
 			: [];
 
-		if ($cpuPart > 0) {
-			$perDevice['cpu'] = ($perDevice['cpu'] ?? 0) + $cpuPart;
+		if ($cpu_part > 0) {
+			$per_device['cpu'] = ($per_device['cpu'] ?? 0) + $cpu_part;
 		}
 
-		return $perDevice;
+		return $per_device;
 	}
 
 	private function gpuFraction(string $n_gpu_layers, int $blocks): float
@@ -227,7 +227,7 @@ final class MemoryEstimator
 	 * @param list<string> $gpus
 	 * @return array<string,int>
 	 */
-	private function splitGpus(Preset $preset, MemoryTopology $topology, array $gpus, int $gpuPart): array
+	private function splitGpus(Preset $preset, MemoryTopology $topology, array $gpus, int $gpu_part): array
 	{
 		$shares = $this->tensorShares($preset->args->tensor_split, $gpus);
 
@@ -248,16 +248,16 @@ final class MemoryEstimator
 		}
 
 		// Integer split; hand the rounding remainder to the first GPU so the
-		// parts sum exactly to $gpuPart.
+		// parts sum exactly to $gpu_part.
 		$out   = [];
 		$given = 0;
 		$first = array_key_first($shares);
 		foreach ($shares as $gpu => $share) {
-			$bytes = (int)floor($gpuPart * $share);
+			$bytes = (int)floor($gpu_part * $share);
 			$out[$gpu] = $bytes;
 			$given += $bytes;
 		}
-		$out[$first] += $gpuPart - $given;
+		$out[$first] += $gpu_part - $given;
 
 		return array_filter($out, static fn(int $b): bool => $b > 0);
 	}

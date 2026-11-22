@@ -30,17 +30,17 @@ final class NgramTable
 
 	/**
 	 * @param bool    $embedded  The table is inside the model file.
-	 * @param ?string $filePath  Resolved path of the separate table, or null.
-	 * @param ?int    $fileBytes Size of the separate table, or null if missing/unreadable.
+	 * @param ?string $file_path  Resolved path of the separate table, or null.
+	 * @param ?int    $file_bytes Size of the separate table, or null if missing/unreadable.
 	 */
 	private function __construct(
 		public readonly bool $embedded,
-		public readonly ?string $filePath,
-		public readonly ?int $fileBytes,
+		public readonly ?string $file_path,
+		public readonly ?int $file_bytes,
 	) {}
 
 	/** Null when the model has no n-gram table (any other architecture, or no header). */
-	public static function of(string $modelPath, ?GgufInfo $info): ?self
+	public static function of(string $model_path, ?GgufInfo $info): ?self
 	{
 		if ($info === null || $info->architecture() !== self::ARCH) {
 			return null;
@@ -51,19 +51,19 @@ final class NgramTable
 			return new self(true, null, null);
 		}
 		// llama.cpp resolves the pointer from the model's folder, not the CWD.
-		$path  = str_starts_with($rel, '/') ? $rel : dirname($modelPath) . '/' . $rel;
+		$path  = str_starts_with($rel, '/') ? $rel : dirname($model_path) . '/' . $rel;
 		$bytes = is_file($path) ? @filesize($path) : false;
 		return new self(false, $path, $bytes === false ? null : $bytes);
 	}
 
 	/** Same as of(), reading the header itself; null if it can't be read. */
-	public static function forPath(string $modelPath): ?self
+	public static function forPath(string $model_path): ?self
 	{
-		if ($modelPath === '') {
+		if ($model_path === '') {
 			return null;
 		}
 		try {
-			return self::of($modelPath, GgufReader::read($modelPath));
+			return self::of($model_path, GgufReader::read($model_path));
 		} catch (\Throwable) {
 			return null;
 		}
@@ -78,8 +78,8 @@ final class NgramTable
 	 */
 	public function estimateSuffix(callable $format): string
 	{
-		return !$this->embedded && $this->fileBytes !== null
-			? ' (+' . $format($this->fileBytes) . ' n-grams)'
+		return !$this->embedded && $this->file_bytes !== null
+			? ' (+' . $format($this->file_bytes) . ' n-grams)'
 			: '';
 	}
 
@@ -94,8 +94,8 @@ final class NgramTable
 		if ($this->embedded) {
 			return self::SIZE_MARK;
 		}
-		return $this->fileBytes !== null
-			? ' + ' . $format($this->fileBytes) . ' n-grams'
+		return $this->file_bytes !== null
+			? ' + ' . $format($this->file_bytes) . ' n-grams'
 			: ' + n-grams (missing)';
 	}
 

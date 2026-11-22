@@ -24,19 +24,19 @@ final class Router
 
 	public function dispatch(Request $r): Response
 	{
-		$pathMatched = false;
+		$path_matched = false;
 		foreach ($this->routes as [$method, $regex, $handler]) {
 			if (!preg_match($regex, $r->path, $m)) {
 				continue;
 			}
-			$pathMatched = true;
+			$path_matched = true;
 			if ($method !== $r->method) {
 				continue;
 			}
 			$params = array_filter($m, 'is_string', ARRAY_FILTER_USE_KEY);
 			return $handler($r, $params);
 		}
-		return $pathMatched
+		return $path_matched
 			? Response::text('Method Not Allowed', 405)
 			: Response::html(Html::page('Not found', '<p>Not found.</p>'), 404);
 	}

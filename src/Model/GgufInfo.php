@@ -18,7 +18,7 @@ final class GgufInfo
 	 */
 	public function __construct(
 		public readonly int $version,
-		public readonly int $tensorCount,
+		public readonly int $tensor_count,
 		public readonly array $metadata,
 		public readonly array $tensors = [],
 	) {}
@@ -204,7 +204,7 @@ final class GgufInfo
 	{
 		return new self(
 			(int)$a['version'],
-			(int)$a['tensorCount'],
+			(int)($a['tensor_count'] ?? $a['tensorCount'] ?? 0), // tensorCount: caches written 2026-11-20..22
 			(array)$a['metadata'],
 			(array)($a['tensors'] ?? []), // absent in cache entries written before tensor capture
 		);

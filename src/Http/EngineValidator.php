@@ -12,13 +12,13 @@ use Throwable;
 final class EngineValidator
 {
 	/** @return array<string,string> field => message */
-	public static function validate(Engine $e, bool $isNew, EngineRepository $engines): array
+	public static function validate(Engine $e, bool $is_new, EngineRepository $engines): array
 	{
 		$errors = [];
 
 		if (!Id::isValid($e->id)) {
 			$errors['id'] = 'Only letters, digits, - . and _ (no leading/trailing dot, no "..")';
-		} elseif ($isNew) {
+		} elseif ($is_new) {
 			try {
 				$engines->load($e->id);
 				$errors['id'] = 'Already exists';

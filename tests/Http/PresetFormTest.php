@@ -307,9 +307,9 @@ class PresetFormTest extends TestCase
 	{
 		$full = FieldHints::load()['ctx_size']['notes'];
 		$html = PresetForm::render(new Preset(['id' => 'p', 'engine_id' => 'e']), $this->models(), false);
-		$firstParagraph = htmlspecialchars(explode("\n", $full)[0], ENT_QUOTES);
+		$first_paragraph = htmlspecialchars(explode("\n", $full)[0], ENT_QUOTES);
 		$this->assertStringContainsString('<div class="help" hidden>', $html);
-		$this->assertStringContainsString($firstParagraph, $html);
+		$this->assertStringContainsString($first_paragraph, $html);
 		// the real CLI flag is inside the help, not the label
 		$this->assertStringContainsString('<code class="flag">-c, --ctx-size</code>', $html);
 	}

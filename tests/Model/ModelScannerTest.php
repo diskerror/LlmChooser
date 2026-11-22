@@ -36,14 +36,14 @@ class ModelScannerTest extends TestCase
         $this->rrmdir($this->r);
     }
 
-    private function entry(array $entries, string $displayName): ModelEntry
+    private function entry(array $entries, string $display_name): ModelEntry
     {
         foreach ($entries as $e) {
-            if ($e->displayName === $displayName) {
+            if ($e->display_name === $display_name) {
                 return $e;
             }
         }
-        $this->fail("no entry '{$displayName}'; got: " . implode(', ', array_column($entries, 'displayName')));
+        $this->fail("no entry '{$display_name}'; got: " . implode(', ', array_column($entries, 'display_name')));
     }
 
     public function test_finds_entries_and_skips_sidecars_and_hidden(): void
@@ -53,7 +53,7 @@ class ModelScannerTest extends TestCase
         $this->assertCount(5, $entries);
         $this->assertSame(
             ['a/plain-Q4_K_M', 'b/big-Q5', 'c/broken', 'q/Q5_K_M-Ngrams/model-Q5', 'z/bad'],
-            array_map(static fn(ModelEntry $e) => $e->displayName, $entries)
+            array_map(static fn(ModelEntry $e) => $e->display_name, $entries)
         );
     }
 
@@ -62,13 +62,13 @@ class ModelScannerTest extends TestCase
         $entries = (new ModelScanner([$this->r]))->scan();
         $e       = $this->entry($entries, 'b/big-Q5');
 
-        $this->assertCount(3, $e->shardPaths);
+        $this->assertCount(3, $e->shard_paths);
         $this->assertStringEndsWith('-00001-of-00003.gguf', $e->path);
         $this->assertSame(
             filesize($this->r . '/b/big-Q5-00001-of-00003.gguf')
             + filesize($this->r . '/b/big-Q5-00002-of-00003.gguf')
             + filesize($this->r . '/b/big-Q5-00003-of-00003.gguf'),
-            $e->sizeBytes
+            $e->size_bytes
         );
         $this->assertNull($e->error);
         $this->assertNotNull($e->info);
@@ -109,16 +109,16 @@ class ModelScannerTest extends TestCase
 
     public function test_cache_used_when_size_and_mtime_match(): void
     {
-        $cacheFile = $this->r . '/cache/model_cache.json';
-        (new ModelScanner([$this->r], $cacheFile))->scan();
+        $cache_file = $this->r . '/cache/model_cache.json';
+        (new ModelScanner([$this->r], $cache_file))->scan();
 
-        $cache = json_decode(file_get_contents($cacheFile), true);
+        $cache = json_decode(file_get_contents($cache_file), true);
         $key   = $this->r . '/a/plain-Q4_K_M.gguf';
         $this->assertArrayHasKey($key, $cache);
         $cache[$key]['info']['metadata']['general.name'] = 'FROM CACHE';
-        file_put_contents($cacheFile, json_encode($cache));
+        file_put_contents($cache_file, json_encode($cache));
 
-        $entries = (new ModelScanner([$this->r], $cacheFile))->scan();
+        $entries = (new ModelScanner([$this->r], $cache_file))->scan();
         $e       = $this->entry($entries, 'a/plain-Q4_K_M');
 
         $this->assertSame('FROM CACHE', $e->info->get('general.name'));
@@ -126,17 +126,17 @@ class ModelScannerTest extends TestCase
 
     public function test_cache_refreshed_when_mtime_changes(): void
     {
-        $cacheFile = $this->r . '/cache/model_cache.json';
-        (new ModelScanner([$this->r], $cacheFile))->scan();
+        $cache_file = $this->r . '/cache/model_cache.json';
+        (new ModelScanner([$this->r], $cache_file))->scan();
 
         $key = $this->r . '/a/plain-Q4_K_M.gguf';
-        $cache = json_decode(file_get_contents($cacheFile), true);
+        $cache = json_decode(file_get_contents($cache_file), true);
         $cache[$key]['info']['metadata']['general.name'] = 'FROM CACHE';
-        file_put_contents($cacheFile, json_encode($cache));
+        file_put_contents($cache_file, json_encode($cache));
 
         touch($key, time() + 10);
 
-        $entries = (new ModelScanner([$this->r], $cacheFile))->scan();
+        $entries = (new ModelScanner([$this->r], $cache_file))->scan();
         $e       = $this->entry($entries, 'a/plain-Q4_K_M');
 
         $this->assertSame('Fixture Model', $e->info->get('general.name'));
@@ -144,16 +144,16 @@ class ModelScannerTest extends TestCase
 
     public function test_cache_drops_removed_files(): void
     {
-        $cacheFile = $this->r . '/cache/model_cache.json';
-        (new ModelScanner([$this->r], $cacheFile))->scan();
+        $cache_file = $this->r . '/cache/model_cache.json';
+        (new ModelScanner([$this->r], $cache_file))->scan();
 
         $key = $this->r . '/a/plain-Q4_K_M.gguf';
-        $this->assertArrayHasKey($key, json_decode(file_get_contents($cacheFile), true));
+        $this->assertArrayHasKey($key, json_decode(file_get_contents($cache_file), true));
 
         unlink($key);
-        (new ModelScanner([$this->r], $cacheFile))->scan();
+        (new ModelScanner([$this->r], $cache_file))->scan();
 
-        $this->assertArrayNotHasKey($key, json_decode(file_get_contents($cacheFile), true));
+        $this->assertArrayNotHasKey($key, json_decode(file_get_contents($cache_file), true));
     }
 
     private function rrmdir(string $dir): void

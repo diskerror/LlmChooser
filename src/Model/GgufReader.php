@@ -64,11 +64,11 @@ final class GgufReader
 			if ($version !== 2 && $version !== 3) {
 				throw new GgufException("Unsupported GGUF version {$version}: {$path}");
 			}
-			$tensorCount = $this->u64();
-			$kvCount     = $this->u64();
+			$tensor_count = $this->u64();
+			$kv_count     = $this->u64();
 
 			$meta = [];
-			for ($i = 0; $i < $kvCount; ++$i) {
+			for ($i = 0; $i < $kv_count; ++$i) {
 				$key  = $this->str();
 				$type = $this->u32();
 				if ($type === self::T_ARRAY) {
@@ -88,21 +88,21 @@ final class GgufReader
 			// reads np.uint32), offset (uint64). We keep name/dims/type and
 			// stop; the data section is never touched.
 			$tensors = [];
-			for ($i = 0; $i < $tensorCount; ++$i) {
+			for ($i = 0; $i < $tensor_count; ++$i) {
 				$name   = $this->str();
-				$nDims  = $this->u32();
-				if ($nDims > 16) {
-					throw new GgufException("Implausible tensor dimension count {$nDims}: {$path}");
+				$n_dims  = $this->u32();
+				if ($n_dims > 16) {
+					throw new GgufException("Implausible tensor dimension count {$n_dims}: {$path}");
 				}
 				$dims = [];
-				for ($d = 0; $d < $nDims; ++$d) {
+				for ($d = 0; $d < $n_dims; ++$d) {
 					$dims[] = $this->u64();
 				}
 				$tensors[] = ['name' => $name, 'dims' => $dims, 'type' => $this->u32()];
 				$this->u64(); // offset within the data section — not needed
 			}
 
-			return new GgufInfo($version, $tensorCount, $meta, $tensors);
+			return new GgufInfo($version, $tensor_count, $meta, $tensors);
 		}
 		finally {
 			fclose($fh);
@@ -184,35 +184,35 @@ final class GgufReader
 	 */
 	private function arrayValue(): ?array
 	{
-		$elemType = $this->u32();
+		$elem_type = $this->u32();
 		$count    = $this->u64();
 
 		$storable = $count <= self::MAX_STORED_ARRAY
-			&& $elemType !== self::T_STRING
-			&& $elemType !== self::T_ARRAY;
+			&& $elem_type !== self::T_STRING
+			&& $elem_type !== self::T_ARRAY;
 
 		if ($storable) {
 			$out = [];
 			for ($i = 0; $i < $count; ++$i) {
-				$out[] = $this->scalar($elemType);
+				$out[] = $this->scalar($elem_type);
 			}
 			return $out;
 		}
 
 		// Skip.
-		if (isset(self::SIZES[$elemType])) {
-			$this->skip($count * self::SIZES[$elemType]);
+		if (isset(self::SIZES[$elem_type])) {
+			$this->skip($count * self::SIZES[$elem_type]);
 			return null;
 		}
 		for ($i = 0; $i < $count; ++$i) {
-			if ($elemType === self::T_STRING) {
+			if ($elem_type === self::T_STRING) {
 				$this->skip($this->u64());
 			}
-			elseif ($elemType === self::T_ARRAY) {
+			elseif ($elem_type === self::T_ARRAY) {
 				$this->arrayValue();
 			}
 			else {
-				throw new GgufException("Unknown array element type {$elemType}: {$this->path}");
+				throw new GgufException("Unknown array element type {$elem_type}: {$this->path}");
 			}
 		}
 		return null;

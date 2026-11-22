@@ -28,7 +28,7 @@ final class EngineHelp
 
 	public function __construct(
 		private readonly string $dir,
-		private readonly string $bundledFile,
+		private readonly string $bundled_file,
 		?Closure $run = null,
 	) {
 		$this->run = $run ?? self::defaultRunner();
@@ -39,7 +39,7 @@ final class EngineHelp
 	 *
 	 * @return array{version:string,captured_at:string,entries:array<string,array{flags:string,text:string}>}
 	 */
-	public function capture(string $engineId, string $binary): array
+	public function capture(string $engine_id, string $binary): array
 	{
 		$problem = BinaryCheck::problem($binary);
 		if ($problem !== null || trim($binary) === '') {
@@ -59,7 +59,7 @@ final class EngineHelp
 			'captured_at' => gmdate('c'),
 			'entries'     => $entries,
 		];
-		$this->save($engineId, $data);
+		$this->save($engine_id, $data);
 		return $data;
 	}
 
@@ -68,9 +68,9 @@ final class EngineHelp
 	 *
 	 * @return array{source:string,version:string,captured_at:string,entries:array<string,array{flags:string,text:string}>}
 	 */
-	public function forEngine(string $engineId): array
+	public function forEngine(string $engine_id): array
 	{
-		$own = $this->load($engineId);
+		$own = $this->load($engine_id);
 		if ($own !== null) {
 			return ['source' => 'engine'] + $own;
 		}
@@ -78,9 +78,9 @@ final class EngineHelp
 	}
 
 	/** @return ?array{version:string,captured_at:string,entries:array<string,array{flags:string,text:string}>} */
-	public function load(string $engineId): ?array
+	public function load(string $engine_id): ?array
 	{
-		$path = $this->path($engineId);
+		$path = $this->path($engine_id);
 		if (!is_file($path)) {
 			return null;
 		}
@@ -93,9 +93,9 @@ final class EngineHelp
 		return is_array($d) && isset($d['entries']) && is_array($d['entries']) ? $d : null;
 	}
 
-	public function delete(string $engineId): void
+	public function delete(string $engine_id): void
 	{
-		$path = $this->path($engineId);
+		$path = $this->path($engine_id);
 		if (is_file($path)) {
 			unlink($path);
 		}
@@ -107,7 +107,7 @@ final class EngineHelp
 		return $this->bundled ??= [
 			'version'     => 'bundled snapshot',
 			'captured_at' => '',
-			'entries'     => HelpParser::parse((string)@file_get_contents($this->bundledFile)),
+			'entries'     => HelpParser::parse((string)@file_get_contents($this->bundled_file)),
 		];
 	}
 
@@ -128,23 +128,23 @@ final class EngineHelp
 	}
 
 	/** @param array<string,mixed> $data */
-	private function save(string $engineId, array $data): void
+	private function save(string $engine_id, array $data): void
 	{
 		if (!is_dir($this->dir) && !mkdir($this->dir, 0775, true) && !is_dir($this->dir)) {
 			throw new RuntimeException("cannot create {$this->dir}");
 		}
 		$json = jsonEncode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-		if (file_put_contents($this->path($engineId), $json . "\n", LOCK_EX) === false) {
+		if (file_put_contents($this->path($engine_id), $json . "\n", LOCK_EX) === false) {
 			throw new RuntimeException('cannot write the help file under ' . $this->dir);
 		}
 	}
 
-	private function path(string $engineId): string
+	private function path(string $engine_id): string
 	{
-		if (!Id::isValid($engineId)) {
-			throw new RuntimeException("Invalid engine id: {$engineId}");
+		if (!Id::isValid($engine_id)) {
+			throw new RuntimeException("Invalid engine id: {$engine_id}");
 		}
-		return $this->dir . '/' . $engineId . '.json';
+		return $this->dir . '/' . $engine_id . '.json';
 	}
 
 	/**
@@ -156,8 +156,8 @@ final class EngineHelp
 	 */
 	private static function defaultRunner(): Closure
 	{
-		return static function (array $argv, string $libDir): ?string {
-			$proc = @proc_open($argv, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, ['LD_LIBRARY_PATH' => $libDir] + getenv());
+		return static function (array $argv, string $lib_dir): ?string {
+			$proc = @proc_open($argv, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, ['LD_LIBRARY_PATH' => $lib_dir] + getenv());
 			if (!is_resource($proc)) {
 				return null;
 			}

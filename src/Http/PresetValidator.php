@@ -15,13 +15,13 @@ use Throwable;
 final class PresetValidator
 {
 	/** @return array<string,string> field => message */
-	public static function validate(Preset $p, EngineRepository $engines, bool $isNew, PresetRepository $presets): array
+	public static function validate(Preset $p, EngineRepository $engines, bool $is_new, PresetRepository $presets): array
 	{
 		$errors = [];
 
 		if (!Id::isValid($p->id)) {
 			$errors['id'] = 'Only letters, digits, - . and _ (no leading/trailing dot, no "..")';
-		} elseif ($isNew) {
+		} elseif ($is_new) {
 			try {
 				$presets->load($p->id);
 				$errors['id'] = 'Already exists';

@@ -54,11 +54,11 @@ class MemoryEstimatorTest extends TestCase
     }
 
     /** KV bytes for the fixture, computed from the formula, not hard-coded. */
-    private function expectKv(int $ctx, float $bk, float $bv, ?int $kvLayers = null): int
+    private function expectKv(int $ctx, float $bk, float $bv, ?int $kv_layers = null): int
     {
-        $layers = $kvLayers ?? self::BLOCKS;
-        $kDim   = self::HEADS_KV * self::KLEN;
-        return (int)ceil($layers * $ctx * ($kDim * $bk + $kDim * $bv));
+        $layers = $kv_layers ?? self::BLOCKS;
+        $k_dim   = self::HEADS_KV * self::KLEN;
+        return (int)ceil($layers * $ctx * ($k_dim * $bk + $k_dim * $bv));
     }
 
     private function preset(array $args = [], array $paths = []): Preset
@@ -170,8 +170,8 @@ class MemoryEstimatorTest extends TestCase
     public function test_all_layers_on_single_gpu(): void
     {
         $a = $this->est->estimate($this->preset(['n_gpu_layers' => 'all']), GgufReader::read($this->model), $this->unified());
-        $this->assertSame(['gpu0'], array_keys($a->perDevice));
-        $this->assertSame($a->totalBytes(), $a->perDevice['gpu0']);
+        $this->assertSame(['gpu0'], array_keys($a->per_device));
+        $this->assertSame($a->totalBytes(), $a->per_device['gpu0']);
     }
 
     public function test_partial_offload(): void
@@ -182,17 +182,17 @@ class MemoryEstimatorTest extends TestCase
             $this->twoDiscrete()
         );
         $total = $a->totalBytes();
-        $this->assertArrayNotHasKey('gpu0', $a->perDevice);
-        $this->assertSame((int)round($total * 0.5), $a->perDevice['gpu1']);
-        $this->assertSame($total - (int)round($total * 0.5), $a->perDevice['cpu']);
-        $this->assertSame($total, array_sum($a->perDevice));
+        $this->assertArrayNotHasKey('gpu0', $a->per_device);
+        $this->assertSame((int)round($total * 0.5), $a->per_device['gpu1']);
+        $this->assertSame($total - (int)round($total * 0.5), $a->per_device['cpu']);
+        $this->assertSame($total, array_sum($a->per_device));
     }
 
     public function test_cpu_only_ngl_zero(): void
     {
         $a = $this->est->estimate($this->preset(['n_gpu_layers' => '0']), GgufReader::read($this->model), $this->twoDiscrete());
-        $this->assertSame(['cpu'], array_keys($a->perDevice));
-        $this->assertSame($a->totalBytes(), $a->perDevice['cpu']);
+        $this->assertSame(['cpu'], array_keys($a->per_device));
+        $this->assertSame($a->totalBytes(), $a->per_device['cpu']);
     }
 
     public function test_tensor_split(): void
@@ -203,10 +203,10 @@ class MemoryEstimatorTest extends TestCase
             $this->twoDiscrete()
         );
         $total = $a->totalBytes();
-        $this->assertSame(['gpu0', 'gpu1'], array_keys($a->perDevice));
-        $this->assertSame($total, array_sum($a->perDevice));
-        $this->assertEqualsWithDelta($total * 0.75, $a->perDevice['gpu0'], 1);
-        $this->assertEqualsWithDelta($total * 0.25, $a->perDevice['gpu1'], 1);
+        $this->assertSame(['gpu0', 'gpu1'], array_keys($a->per_device));
+        $this->assertSame($total, array_sum($a->per_device));
+        $this->assertEqualsWithDelta($total * 0.75, $a->per_device['gpu0'], 1);
+        $this->assertEqualsWithDelta($total * 0.25, $a->per_device['gpu1'], 1);
     }
 
     public function test_even_split_layer_mode(): void
@@ -217,15 +217,15 @@ class MemoryEstimatorTest extends TestCase
             $this->twoDiscrete()
         );
         $total = $a->totalBytes();
-        $this->assertSame($total, array_sum($a->perDevice));
-        $this->assertEqualsWithDelta($total / 2, $a->perDevice['gpu0'], 1);
-        $this->assertEqualsWithDelta($total / 2, $a->perDevice['gpu1'], 1);
+        $this->assertSame($total, array_sum($a->per_device));
+        $this->assertEqualsWithDelta($total / 2, $a->per_device['gpu0'], 1);
+        $this->assertEqualsWithDelta($total / 2, $a->per_device['gpu1'], 1);
     }
 
     public function test_no_gpus(): void
     {
         $a = $this->est->estimate($this->preset(['n_gpu_layers' => 'all']), GgufReader::read($this->model), $this->cpuOnly());
-        $this->assertSame(['cpu'], array_keys($a->perDevice));
+        $this->assertSame(['cpu'], array_keys($a->per_device));
     }
 
     // ---- kvBytesPer1k (Phase 12 drawer) ----
@@ -257,10 +257,10 @@ class MemoryEstimatorTest extends TestCase
             ['llama.attention.value_length', GgufReader::T_UINT32, self::KLEN],
         ]);
         $gqa = $this->est->kvBytesPer1k(GgufReader::read($this->model), 'f16');
-        $mhaKv = $this->est->kvBytesPer1k(GgufReader::read($mha), 'f16');
-        $this->assertLessThan($mhaKv, $gqa);
+        $mha_kv = $this->est->kvBytesPer1k(GgufReader::read($mha), 'f16');
+        $this->assertLessThan($mha_kv, $gqa);
         // exactly half: 2 kv heads vs 4, everything else equal
-        $this->assertSame(intdiv($mhaKv, 2), $gqa);
+        $this->assertSame(intdiv($mha_kv, 2), $gqa);
     }
 
     public function test_kv_bytes_per_1k_hybrid_interval(): void

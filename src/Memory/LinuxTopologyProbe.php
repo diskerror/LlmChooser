@@ -22,13 +22,13 @@ final class LinuxTopologyProbe implements TopologyProbe
 
 	/**
 	 * @param ?Closure(array):?string $runCommand runs argv and returns stdout, or null on failure
-	 * @param int $unifiedThresholdBytes a GPU with a total below this is treated as sharing system RAM
+	 * @param int $unified_threshold_bytes a GPU with a total below this is treated as sharing system RAM
 	 */
 	public function __construct(
-		private readonly string $procRoot = '/proc',
-		private readonly string $sysRoot = '/sys',
+		private readonly string $proc_root = '/proc',
+		private readonly string $sys_root = '/sys',
 		?Closure $runCommand = null,
-		private readonly int $unifiedThresholdBytes = 2 * 1024 ** 3,
+		private readonly int $unified_threshold_bytes = 2 * 1024 ** 3,
 	) {
 		$this->runCommand = $runCommand ?? self::defaultRunner();
 	}
@@ -46,16 +46,16 @@ final class LinuxTopologyProbe implements TopologyProbe
 		// The kernel already counts them as used, so this only explains the
 		// gap between "used" and the sum of process RSS; never re-add it.
 		$held = 0;
-		$gttTotal = 0;
-		foreach (glob($this->sysRoot . '/class/drm/card*/device/mem_info_gtt_used') ?: [] as $file) {
+		$gtt_total = 0;
+		foreach (glob($this->sys_root . '/class/drm/card*/device/mem_info_gtt_used') ?: [] as $file) {
 			if (preg_match('/^card\d+-/', basename(dirname($file, 2)))) {
 				continue; // connector entries, would double-count
 			}
 			$held += max(0, (int)@file_get_contents($file));
-			$gttTotal += max(0, (int)@file_get_contents(dirname($file) . '/mem_info_gtt_total'));
+			$gtt_total += max(0, (int)@file_get_contents(dirname($file) . '/mem_info_gtt_total'));
 		}
 		if ($held > 0) {
-			$cpu = new Device($cpu->id, $cpu->kind, $cpu->totalBytes, $cpu->availableBytes, $cpu->unifiedWith, $held);
+			$cpu = new Device($cpu->id, $cpu->kind, $cpu->total_bytes, $cpu->available_bytes, $cpu->unified_with, $held);
 		}
 
 		// Unified (APU) boxes: the GPU can only address system RAM up to the
@@ -65,12 +65,12 @@ final class LinuxTopologyProbe implements TopologyProbe
 		// (MemAvailable already excludes GTT pages, so nothing is re-added.)
 		$unified = false;
 		foreach ($gpus as $g) {
-			$unified = $unified || $g->unifiedWith === 'cpu';
+			$unified = $unified || $g->unified_with === 'cpu';
 		}
-		if ($unified && $gttTotal > 0) {
+		if ($unified && $gtt_total > 0) {
 			$cpu = new Device(
-				$cpu->id, $cpu->kind, min($cpu->totalBytes, $gttTotal),
-				min($cpu->availableBytes, max(0, $gttTotal - $held)), $cpu->unifiedWith, $cpu->driverHeldBytes,
+				$cpu->id, $cpu->kind, min($cpu->total_bytes, $gtt_total),
+				min($cpu->available_bytes, max(0, $gtt_total - $held)), $cpu->unified_with, $cpu->driver_held_bytes,
 			);
 		}
 
@@ -101,7 +101,7 @@ final class LinuxTopologyProbe implements TopologyProbe
 
 	private function systemRam(): Device
 	{
-		$file = $this->procRoot . '/meminfo';
+		$file = $this->proc_root . '/meminfo';
 		if (!is_file($file)) {
 			throw new RuntimeException("Cannot read memory info: {$file}");
 		}
@@ -131,7 +131,7 @@ final class LinuxTopologyProbe implements TopologyProbe
 
 	private function memField(string $name): ?int
 	{
-		foreach (file($this->procRoot . '/meminfo', FILE_IGNORE_NEW_LINES) ?: [] as $line) {
+		foreach (file($this->proc_root . '/meminfo', FILE_IGNORE_NEW_LINES) ?: [] as $line) {
 			if (preg_match('/^' . $name . ':\s+(\d+)\s*kB$/', $line, $m)) {
 				return (int)$m[1] * 1024;
 			}
@@ -148,7 +148,7 @@ final class LinuxTopologyProbe implements TopologyProbe
 	 */
 	private function amdGpus(): array
 	{
-		$files = glob($this->sysRoot . '/class/drm/card*/device/mem_info_vram_total') ?: [];
+		$files = glob($this->sys_root . '/class/drm/card*/device/mem_info_vram_total') ?: [];
 
 		$cards = [];
 		foreach ($files as $file) {
@@ -211,7 +211,7 @@ final class LinuxTopologyProbe implements TopologyProbe
 
 	private function gpu(int $index, int $total, int $available): Device
 	{
-		$unified = $total < $this->unifiedThresholdBytes ? 'cpu' : null;
+		$unified = $total < $this->unified_threshold_bytes ? 'cpu' : null;
 		return new Device('gpu' . $index, Device::KIND_VRAM, $total, $available, $unified);
 	}
 }

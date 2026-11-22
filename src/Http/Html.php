@@ -55,14 +55,14 @@ final class Html
 	}
 
 	/** A one-button POST form. */
-	public static function postButton(string $action, string $label, string $class = '', string $confirm = '', string $formClass = '', array $formAttrs = []): string
+	public static function postButton(string $action, string $label, string $class = '', string $confirm = '', string $form_class = '', array $form_attrs = []): string
 	{
 		$onsubmit = $confirm !== '' ? ' onsubmit="return confirm(' . self::e(json_encode($confirm)) . ')"' : '';
 		$attrs    = '';
-		foreach ($formAttrs as $k => $v) {
+		foreach ($form_attrs as $k => $v) {
 			$attrs .= ' ' . self::e($k) . '="' . self::e($v) . '"';
 		}
-		$cls = trim('inline ' . $formClass);
+		$cls = trim('inline ' . $form_class);
 		return '<form method="post" action="' . self::e($action) . '" class="' . self::e($cls) . '"' . $onsubmit . $attrs . '>'
 			. '<button type="submit" class="' . self::e($class) . '">' . self::e($label) . '</button></form>';
 	}

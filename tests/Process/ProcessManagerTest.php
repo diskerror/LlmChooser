@@ -61,12 +61,12 @@ class ProcessManagerTest extends TestCase
         $this->pm = $this->manager(100);
     }
 
-    private function manager(float $availableGb): ProcessManager
+    private function manager(float $available_gb): ProcessManager
     {
         $g = 1024 ** 3;
         $topo = new MemoryTopology([
-            new Device('cpu', Device::KIND_RAM, 100 * $g, (int)($availableGb * $g)),
-            new Device('gpu0', Device::KIND_VRAM, $g / 2, (int)($availableGb * $g / 2), 'cpu'),
+            new Device('cpu', Device::KIND_RAM, 100 * $g, (int)($available_gb * $g)),
+            new Device('gpu0', Device::KIND_VRAM, $g / 2, (int)($available_gb * $g / 2), 'cpu'),
         ]);
         return new ProcessManager(
             $this->presets,
@@ -74,7 +74,7 @@ class ProcessManagerTest extends TestCase
             $this->state,
             new MemoryService(new FixedTopologyProbe($topo)),
             $this->dir . '/logs',
-            stopTimeoutSeconds: 2,
+            stop_timeout_seconds: 2,
         );
     }
 
@@ -304,27 +304,27 @@ class ProcessManagerTest extends TestCase
             new MemoryService(new FixedTopologyProbe($topo)),
             $this->dir . '/logs',
             proc: $proc,
-            stopTimeoutSeconds: 2,
+            stop_timeout_seconds: 2,
         );
     }
 
-    private function topo(float $availableGb): MemoryTopology
+    private function topo(float $available_gb): MemoryTopology
     {
         $g = 1024 ** 3;
         return new MemoryTopology([
-            new Device('cpu', Device::KIND_RAM, 100 * $g, (int)($availableGb * $g)),
-            new Device('gpu0', Device::KIND_VRAM, $g / 2, (int)($availableGb * $g / 2), 'cpu'),
+            new Device('cpu', Device::KIND_RAM, 100 * $g, (int)($available_gb * $g)),
+            new Device('gpu0', Device::KIND_VRAM, $g / 2, (int)($available_gb * $g / 2), 'cpu'),
         ]);
     }
 
-    private function scriptedManager(array $topos, int $releaseTimeout): ProcessManager
+    private function scriptedManager(array $topos, int $release_timeout): ProcessManager
     {
         return new ProcessManager(
             $this->presets, $this->engines, $this->state,
             new MemoryService(new ScriptedTopologyProbe($topos)),
             $this->dir . '/logs',
-            stopTimeoutSeconds: 2,
-            releaseTimeoutSeconds: $releaseTimeout,
+            stop_timeout_seconds: 2,
+            release_timeout_seconds: $release_timeout,
         );
     }
 

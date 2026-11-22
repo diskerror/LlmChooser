@@ -25,15 +25,15 @@ final class ModelScanner
 	/** @var list<string> */
 	private array $roots;
 
-	private ?string $cacheFile;
+	private ?string $cache_file;
 
 	/**
 	 * @param list<string> $roots Absolute directory paths; missing roots are ignored.
 	 */
-	public function __construct(array $roots, ?string $cacheFile = null)
+	public function __construct(array $roots, ?string $cache_file = null)
 	{
 		$this->roots     = array_map(static fn(string $r) => rtrim($r, '/'), $roots);
-		$this->cacheFile = $cacheFile;
+		$this->cache_file = $cache_file;
 	}
 
 	/**
@@ -42,7 +42,7 @@ final class ModelScanner
 	 * separate model-roots config). Engines with an empty model_dir
 	 * contribute nothing; duplicates collapse.
 	 */
-	public static function fromEngines(EngineCollection $engines, string $cacheFile): self
+	public static function fromEngines(EngineCollection $engines, string $cache_file): self
 	{
 		$roots = [];
 		foreach ($engines as $engine) {
@@ -50,7 +50,7 @@ final class ModelScanner
 				$roots[$engine->model_dir] = true;
 			}
 		}
-		return new self(array_keys($roots), $cacheFile);
+		return new self(array_keys($roots), $cache_file);
 	}
 
 	/** @return list<ModelEntry> */
@@ -123,7 +123,7 @@ final class ModelScanner
 		$this->writeCache($cache);
 
 		$objects = array_map(fn(array $e) => $this->toEntry($e), $entries);
-		usort($objects, static fn(ModelEntry $a, ModelEntry $b) => strnatcasecmp($a->displayName, $b->displayName));
+		usort($objects, static fn(ModelEntry $a, ModelEntry $b) => strnatcasecmp($a->display_name, $b->display_name));
 		return $objects;
 	}
 
@@ -149,18 +149,18 @@ final class ModelScanner
 	}
 
 	/** null = model file, otherwise the sidecar kind. */
-	private function classify(string $lowerName): ?string
+	private function classify(string $lower_name): ?string
 	{
-		if (str_starts_with($lowerName, 'mmproj')) {
+		if (str_starts_with($lower_name, 'mmproj')) {
 			return 'mmproj';
 		}
-		if (str_contains($lowerName, 'ngram')) {
+		if (str_contains($lower_name, 'ngram')) {
 			return 'ngrams';
 		}
-		if (str_starts_with($lowerName, 'mtp-')
-			|| str_contains($lowerName, '-draft')
-			|| str_contains($lowerName, '_draft')
-			|| str_contains($lowerName, '.draft')
+		if (str_starts_with($lower_name, 'mtp-')
+			|| str_contains($lower_name, '-draft')
+			|| str_contains($lower_name, '_draft')
+			|| str_contains($lower_name, '.draft')
 		) {
 			return 'draft';
 		}
@@ -196,28 +196,28 @@ final class ModelScanner
 		$entries = [];
 		foreach ($groups as $g) {
 			ksort($g['items']);
-			$shardPaths = array_column($g['items'], 'path');
+			$shard_paths = array_column($g['items'], 'path');
 			$have       = count($g['items']);
 			$first      = $g['items'][1]['path'] ?? null;
 
-			$rel = $this->relativeName($g['root'], $shardPaths[0] ?? '', stripShard: true);
+			$rel = $this->relativeName($g['root'], $shard_paths[0] ?? '', strip_shard: true);
 			if ($first === null || $have !== $g['total']) {
 				$entries[] = $this->entry(
-					$shardPaths[0], $rel, array_sum(array_column($g['items'], 'size')),
-					$shardPaths, $g['root'], "incomplete shard set: have {$have} of {$g['total']}", null
+					$shard_paths[0], $rel, array_sum(array_column($g['items'], 'size')),
+					$shard_paths, $g['root'], "incomplete shard set: have {$have} of {$g['total']}", null
 				);
 			}
 			else {
 				$entries[] = $this->entry(
 					$first, $rel, array_sum(array_column($g['items'], 'size')),
-					$shardPaths, $g['root'], null, null
+					$shard_paths, $g['root'], null, null
 				);
 			}
 		}
 
 		foreach ($plain as $p) {
 			$root = $this->rootOf($p['path']);
-			$rel  = $this->relativeName($root, $p['path'], stripShard: false);
+			$rel  = $this->relativeName($root, $p['path'], strip_shard: false);
 			$entries[] = $this->entry($p['path'], $rel, (int)filesize($p['path']), [$p['path']], $root, null, null);
 		}
 
@@ -225,16 +225,16 @@ final class ModelScanner
 	}
 
 	/**
-	 * @param list<string> $shardPaths
-	 * @return array{path:string,displayName:string,sizeBytes:int,shardPaths:list<string>,root:string,error:?string,info:?GgufInfo}
+	 * @param list<string> $shard_paths
+	 * @return array{path:string,display_name:string,size_bytes:int,shard_paths:list<string>,root:string,error:?string,info:?GgufInfo}
 	 */
-	private function entry(string $path, string $displayName, int $sizeBytes, array $shardPaths, string $root, ?string $error, ?GgufInfo $info): array
+	private function entry(string $path, string $display_name, int $size_bytes, array $shard_paths, string $root, ?string $error, ?GgufInfo $info): array
 	{
 		return [
 			'path'        => $path,
-			'displayName' => $displayName,
-			'sizeBytes'   => $sizeBytes,
-			'shardPaths'  => $shardPaths,
+			'display_name' => $display_name,
+			'size_bytes'   => $size_bytes,
+			'shard_paths'  => $shard_paths,
 			'root'        => $root,
 			'error'       => $error,
 			'info'        => $info,
@@ -254,10 +254,10 @@ final class ModelScanner
 	}
 
 	/** Path relative to root, without ".gguf" (and without shard suffix if asked). */
-	private function relativeName(string $root, string $path, bool $stripShard): string
+	private function relativeName(string $root, string $path, bool $strip_shard): string
 	{
 		$rel = substr($path, strlen($root) + 1);
-		if ($stripShard && preg_match(self::SHARD_RE, basename($rel), $m)) {
+		if ($strip_shard && preg_match(self::SHARD_RE, basename($rel), $m)) {
 			$dir  = dirname($rel);
 			$rel  = $dir === '.' ? $m[1] : $dir . '/' . $m[1];
 		}
@@ -274,13 +274,13 @@ final class ModelScanner
 	private function attachSidecars(array &$entries, array $sidecars): void
 	{
 		foreach ($entries as &$e) {
-			$modelDir = dirname($e['path']);
-			$shared   = dirname($modelDir) . '/shared';
+			$model_dir = dirname($e['path']);
+			$shared   = dirname($model_dir) . '/shared';
 			$found    = ['mmproj' => [], 'draft' => [], 'ngrams' => []];
 			foreach ($sidecars as $kind => $files) {
 				foreach ($files as $f) {
 					$dir = $f->getPath();
-					if ($dir === $modelDir || $dir === $shared) {
+					if ($dir === $model_dir || $dir === $shared) {
 						$found[$kind][] = $f->getPathname();
 					}
 				}
@@ -294,17 +294,17 @@ final class ModelScanner
 	/** Two entries from different roots with the same display name both get " (root)". */
 	private function fixDisplayCollisions(array &$entries): void
 	{
-		$byName = [];
+		$by_name = [];
 		foreach ($entries as $i => $e) {
-			$byName[$e['displayName']][$e['root']][] = $i;
+			$by_name[$e['display_name']][$e['root']][] = $i;
 		}
-		foreach ($byName as $name => $roots) {
+		foreach ($by_name as $name => $roots) {
 			if (count($roots) < 2) {
 				continue;
 			}
 			foreach ($roots as $root => $indices) {
 				foreach ($indices as $i) {
-					$entries[$i]['displayName'] = $name . ' (' . $root . ')';
+					$entries[$i]['display_name'] = $name . ' (' . $root . ')';
 				}
 			}
 		}
@@ -313,11 +313,11 @@ final class ModelScanner
 	/** @return array<string, array{size:int, mtime:int, info:array}> */
 	private function loadCache(): array
 	{
-		if ($this->cacheFile === null || !is_file($this->cacheFile)) {
+		if ($this->cache_file === null || !is_file($this->cache_file)) {
 			return [];
 		}
 		try {
-			$cache = jsonDecode((string)file_get_contents($this->cacheFile));
+			$cache = jsonDecode((string)file_get_contents($this->cache_file));
 		}
 		catch (\JsonException) {
 			return [];
@@ -328,15 +328,15 @@ final class ModelScanner
 	/** @param array<string, mixed> $cache */
 	private function writeCache(array $cache): void
 	{
-		if ($this->cacheFile === null) {
+		if ($this->cache_file === null) {
 			return;
 		}
-		$dir = dirname($this->cacheFile);
+		$dir = dirname($this->cache_file);
 		if (!is_dir($dir)) {
 			mkdir($dir, 0775, true);
 		}
 		file_put_contents(
-			$this->cacheFile,
+			$this->cache_file,
 			jsonEncode($cache, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE)
 		);
 	}
@@ -346,9 +346,9 @@ final class ModelScanner
 	{
 		return new ModelEntry(
 			$e['path'],
-			$e['displayName'],
-			$e['sizeBytes'],
-			$e['shardPaths'],
+			$e['display_name'],
+			$e['size_bytes'],
+			$e['shard_paths'],
 			$e['sidecars'],
 			$e['info'],
 			$e['error'],

@@ -35,10 +35,10 @@ final class ChatTemplateFamily
 	}
 
 	/** Family key, or null if no known fingerprint matches. */
-	public static function detect(string $chatTemplate): ?string
+	public static function detect(string $chat_template): ?string
 	{
 		foreach (self::table() as $key => $def) {
-			if ($chatTemplate !== '' && str_contains($chatTemplate, $def['fingerprint'])) {
+			if ($chat_template !== '' && str_contains($chat_template, $def['fingerprint'])) {
 				return $key;
 			}
 		}
@@ -46,13 +46,13 @@ final class ChatTemplateFamily
 	}
 
 	/** @return list<string> valid reasoning_effort values for this family, or [] if unknown. */
-	public static function reasoningEfforts(string $familyKey): array
+	public static function reasoningEfforts(string $family_key): array
 	{
-		return self::table()[$familyKey]['reasoning_efforts'] ?? [];
+		return self::table()[$family_key]['reasoning_efforts'] ?? [];
 	}
 
-	public static function defaultReasoningEffort(string $familyKey): ?string
+	public static function defaultReasoningEffort(string $family_key): ?string
 	{
-		return self::table()[$familyKey]['default'] ?? null;
+		return self::table()[$family_key]['default'] ?? null;
 	}
 }

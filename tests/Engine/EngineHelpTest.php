@@ -28,10 +28,10 @@ class EngineHelpTest extends TestCase
 		@rmdir($this->dir);
 	}
 
-	private function fakeBinary(string $helpBody = "-c,    --ctx-size N                     context size\n"): string
+	private function fakeBinary(string $help_body = "-c,    --ctx-size N                     context size\n"): string
 	{
 		$bin = $this->dir . '/fake-server';
-		file_put_contents($bin, "#!/bin/sh\nif [ \"\$1\" = \"--version\" ]; then echo 'version: 42 (abc)' >&2; exit 0; fi\ncat <<'EOF'\n{$helpBody}EOF\n");
+		file_put_contents($bin, "#!/bin/sh\nif [ \"\$1\" = \"--version\" ]; then echo 'version: 42 (abc)' >&2; exit 0; fi\ncat <<'EOF'\n{$help_body}EOF\n");
 		chmod($bin, 0755);
 		return $bin;
 	}

@@ -19,19 +19,19 @@ class AdmissionCheckTest extends TestCase
         $this->check = new AdmissionCheck();
     }
 
-    private function unified(float $cpuAvailableGb = 100): MemoryTopology
+    private function unified(float $cpu_available_gb = 100): MemoryTopology
     {
         $g = 1024 ** 3;
         return new MemoryTopology([
-            new Device('cpu', Device::KIND_RAM, 100 * $g, (int)($cpuAvailableGb * $g)),
+            new Device('cpu', Device::KIND_RAM, 100 * $g, (int)($cpu_available_gb * $g)),
             new Device('gpu0', Device::KIND_VRAM, $g / 2, $g / 2, 'cpu'),
         ]);
     }
 
-    /** @param array<string,int> $perDevice */
-    private function alloc(array $perDevice): Allocation
+    /** @param array<string,int> $per_device */
+    private function alloc(array $per_device): Allocation
     {
-        return new Allocation($perDevice, []);
+        return new Allocation($per_device, []);
     }
 
     public function test_unified_fits_and_collapses_to_cpu(): void
@@ -40,8 +40,8 @@ class AdmissionCheckTest extends TestCase
 
         $this->assertTrue($r->fits);
         // gpu0 aliased to cpu: exactly one budget row.
-        $this->assertSame(['cpu'], array_keys($r->perBudget));
-        $this->assertSame(60_000_000_000, $r->perBudget['cpu']['need']);
+        $this->assertSame(['cpu'], array_keys($r->per_budget));
+        $this->assertSame(60_000_000_000, $r->per_budget['cpu']['need']);
     }
 
     public function test_unified_combined_exceeds(): void
@@ -53,7 +53,7 @@ class AdmissionCheckTest extends TestCase
         );
 
         $this->assertFalse($r->fits);
-        $this->assertSame(110_000_000_000, $r->perBudget['cpu']['need']);
+        $this->assertSame(110_000_000_000, $r->per_budget['cpu']['need']);
     }
 
     public function test_discrete_full_gpu_does_not_block_other(): void
@@ -66,7 +66,7 @@ class AdmissionCheckTest extends TestCase
         $r = $this->check->check($this->alloc(['gpu1' => 10_000_000_000]), [], $topo);
 
         $this->assertTrue($r->fits);
-        $this->assertSame(['gpu1'], array_keys($r->perBudget));
+        $this->assertSame(['gpu1'], array_keys($r->per_budget));
     }
 
     public function test_discrete_one_fails_one_ok(): void
@@ -92,7 +92,7 @@ class AdmissionCheckTest extends TestCase
             $this->unified()
         );
 
-        $this->assertSame(5_000_000_000, $r->perBudget['cpu']['already']);
+        $this->assertSame(5_000_000_000, $r->per_budget['cpu']['already']);
         // MemAvailable already excludes the running instance: need is
         // compared on its own, so this still fits.
         $this->assertTrue($r->fits);
@@ -103,6 +103,6 @@ class AdmissionCheckTest extends TestCase
         $r = $this->check->check($this->alloc(['gpu7' => 1]), [], $this->unified());
 
         $this->assertFalse($r->fits);
-        $this->assertSame(0, $r->perBudget['gpu7']['available']);
+        $this->assertSame(0, $r->per_budget['gpu7']['available']);
     }
 }
