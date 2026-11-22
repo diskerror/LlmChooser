@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace LlmChooser\Http;
 
+use LlmChooser\Config\Id;
 use LlmChooser\Engine\Engine;
 use LlmChooser\Engine\EngineRepository;
 use Throwable;
@@ -15,7 +16,7 @@ final class EngineValidator
 	{
 		$errors = [];
 
-		if (!preg_match('/^(?!\.)(?!.*\.\.)[A-Za-z0-9_.-]+(?<!\.)$/', $e->id)) {
+		if (!Id::isValid($e->id)) {
 			$errors['id'] = 'Only letters, digits, - . and _ (no leading/trailing dot, no "..")';
 		} elseif ($isNew) {
 			try {

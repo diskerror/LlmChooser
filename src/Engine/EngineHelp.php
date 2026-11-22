@@ -6,6 +6,7 @@ namespace LlmChooser\Engine;
 
 use Closure;
 use JsonException;
+use LlmChooser\Config\Id;
 use RuntimeException;
 
 use function Diskerror\Library\Json\decode as jsonDecode;
@@ -140,7 +141,7 @@ final class EngineHelp
 
 	private function path(string $engineId): string
 	{
-		if (!preg_match('/^(?!\.)(?!.*\.\.)[A-Za-z0-9_.-]+(?<!\.)$/', $engineId)) {
+		if (!Id::isValid($engineId)) {
 			throw new RuntimeException("Invalid engine id: {$engineId}");
 		}
 		return $this->dir . '/' . $engineId . '.json';

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace LlmChooser\Engine;
 
 use LlmChooser\Config\BrokenFile;
+use LlmChooser\Config\Id;
 use LlmChooser\Config\JsonStore;
 use RuntimeException;
 
@@ -63,7 +64,7 @@ class EngineRepository
     {
         // Dots are allowed (see PresetRepository::pathFor), but never ".."
         // or a leading/trailing dot.
-        if (!preg_match('/^(?!\.)(?!.*\.\.)[A-Za-z0-9_.-]+(?<!\.)$/', $id)) {
+        if (!Id::isValid($id)) {
             throw new RuntimeException("Invalid engine id: {$id}");
         }
         return $this->dir . '/' . $id . '.json';

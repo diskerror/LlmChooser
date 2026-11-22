@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace LlmChooser\Preset;
 
 use LlmChooser\Config\BrokenFile;
+use LlmChooser\Config\Id;
 use LlmChooser\Config\JsonStore;
 use RuntimeException;
 
@@ -73,7 +74,7 @@ class PresetRepository
         // never ".." or a leading/trailing dot — id is used verbatim as a
         // filename, so that's the only thing standing between here and
         // path traversal.
-        if (!preg_match('/^(?!\.)(?!.*\.\.)[A-Za-z0-9_.-]+(?<!\.)$/', $id)) {
+        if (!Id::isValid($id)) {
             throw new RuntimeException("Invalid preset id: {$id}");
         }
         return $this->dir . '/' . $id . '.json';

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace LlmChooser\Http;
 
+use LlmChooser\Config\Id;
 use LlmChooser\Engine\EngineRepository;
 use LlmChooser\Model\ChatTemplateFamily;
 use LlmChooser\Model\GgufReader;
@@ -18,7 +19,7 @@ final class PresetValidator
 	{
 		$errors = [];
 
-		if (!preg_match('/^(?!\.)(?!.*\.\.)[A-Za-z0-9_.-]+(?<!\.)$/', $p->id)) {
+		if (!Id::isValid($p->id)) {
 			$errors['id'] = 'Only letters, digits, - . and _ (no leading/trailing dot, no "..")';
 		} elseif ($isNew) {
 			try {
