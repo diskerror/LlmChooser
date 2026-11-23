@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace LlmChooser\Http;
 
-final class Request
+final readonly class Request
 {
 	/**
 	 * @param array<string,mixed>  $query
@@ -12,12 +12,12 @@ final class Request
 	 * @param array<string,string> $headers lower-case names
 	 */
 	public function __construct(
-		public readonly string $method,
-		public readonly string $path,
-		public readonly array $query = [],
-		public readonly array $post = [],
-		public readonly array $headers = [],
-		public readonly string $body = '',
+		public string $method,
+		public string $path,
+		public array $query = [],
+		public array $post = [],
+		public array $headers = [],
+		public string $body = '',
 	) {}
 
 	public static function fromGlobals(): self

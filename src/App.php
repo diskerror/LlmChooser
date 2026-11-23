@@ -15,16 +15,16 @@ use LlmChooser\Process\ProcessManager;
 use LlmChooser\Process\RuntimeState;
 
 /** Builds the shared services from the project directory layout. */
-final class App
+final readonly class App
 {
-	public readonly PresetRepository $presets;
-	public readonly EngineRepository $engines;
-	public readonly EngineHelp $help;
-	public readonly RuntimeState $state;
-	public readonly MemoryService $memory;
-	public readonly ProcessManager $processes;
+	public PresetRepository $presets;
+	public EngineRepository $engines;
+	public EngineHelp $help;
+	public RuntimeState $state;
+	public MemoryService $memory;
+	public ProcessManager $processes;
 
-	public function __construct(public readonly string $root, ?TopologyProbe $probe = null)
+	public function __construct(public string $root, ?TopologyProbe $probe = null)
 	{
 		$this->presets   = new PresetRepository($root . '/storage/presets');
 		$this->engines   = new EngineRepository($root . '/storage/engines');

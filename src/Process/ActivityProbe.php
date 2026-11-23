@@ -17,6 +17,8 @@ namespace LlmChooser\Process;
  * - generating  a slot has produced tokens. /slots cannot tell reasoning
  *               from the answer, so that distinction is not made here.
  */
+// Not a readonly class: tests extend it with an anonymous class, which
+// PHP 8.2 cannot declare readonly (8.3 can).
 class ActivityProbe
 {
 	public const IDLE        = 'idle';

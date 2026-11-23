@@ -24,19 +24,19 @@ use function LlmChooser\Config\ensureDir;
  * - Stopped instances are removed from state; the log file stays on disk,
  *   which is where the reason for a failure lives.
  */
-final class ProcessManager
+final readonly class ProcessManager
 {
 	public function __construct(
-		private readonly PresetRepository $presets,
-		private readonly EngineRepository $engines,
-		private readonly RuntimeState $state,
-		private readonly MemoryService $memory,
-		private readonly string $log_dir,
-		private readonly CommandBuilder $builder = new CommandBuilder(),
-		private readonly ProcessControl $proc = new ProcessControl(),
-		private readonly HealthChecker $health = new HealthChecker(),
-		private readonly int $stop_timeout_seconds = 15,
-		private readonly int $release_timeout_seconds = 15,
+		private PresetRepository $presets,
+		private EngineRepository $engines,
+		private RuntimeState $state,
+		private MemoryService $memory,
+		private string $log_dir,
+		private CommandBuilder $builder = new CommandBuilder(),
+		private ProcessControl $proc = new ProcessControl(),
+		private HealthChecker $health = new HealthChecker(),
+		private int $stop_timeout_seconds = 15,
+		private int $release_timeout_seconds = 15,
 	) {}
 
 	public function start(string $preset_id, bool $force = false): Instance

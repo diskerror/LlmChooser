@@ -4,7 +4,7 @@
     "minimum-stability": "dev",
     "prefer-stable": true,
     "require": {
-        "php": ">=8.1",
+        "php": ">=8.2",
         "diskerror/typed": "1.0.*",
         "diskerror/p_lib": "dev-master",
         "ext-pcntl": "*"

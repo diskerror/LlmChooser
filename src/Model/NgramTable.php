@@ -13,7 +13,7 @@ namespace LlmChooser\Model;
  * to the model's folder). The estimate does not model this yet; the UI only
  * flags it.
  */
-final class NgramTable
+final readonly class NgramTable
 {
 	public const ARCH = 'qwen4exp';
 	public const FILE_KEY = 'qwen4exp.ngram_file';
@@ -34,9 +34,9 @@ final class NgramTable
 	 * @param ?int    $file_bytes Size of the separate table, or null if missing/unreadable.
 	 */
 	private function __construct(
-		public readonly bool $embedded,
-		public readonly ?string $file_path,
-		public readonly ?int $file_bytes,
+		public bool $embedded,
+		public ?string $file_path,
+		public ?int $file_bytes,
 	) {}
 
 	/** Null when the model has no n-gram table (any other architecture, or no header). */

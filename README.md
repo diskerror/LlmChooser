@@ -41,7 +41,7 @@ and see what it costs in memory before you load it.
 - A web-based GUI.
 - Runs on PHP's built-in server (no web server needed), or behind nginx +
   php-fpm.
-- PHP 8.1 or newer. Unit tests are run on PHP 8.1 through 8.5; the developer
+- PHP 8.2 or newer. Unit tests are run on PHP 8.2 through 8.5; the developer
   uses it daily on Debian 13 with PHP 8.4.
 
 You also need a built `llama-server` (llama.cpp) on the machine that will run
@@ -51,9 +51,9 @@ the models.
 
 Requirements, all from the distribution's own packages (no extra package
 sources needed):
-- PHP 8.1 or newer, CLI, with the `curl` and `intl` extensions (the
-  distribution's default PHP is fine: Debian 13 ships 8.4, Ubuntu 26.04
-  ships 8.5).
+- PHP 8.2 or newer, CLI, with the `curl` and `intl` extensions (the
+  distribution's default PHP is fine: Debian 12 ships 8.2, Debian 13 8.4,
+  Ubuntu 24.04 8.3, Ubuntu 26.04 8.5; Ubuntu 22.04's 8.1 is too old).
   `pcntl` and `posix` come with `php-cli`.
 - Composer, to install the PHP dependencies.
 - A built `llama-server` (llama.cpp).

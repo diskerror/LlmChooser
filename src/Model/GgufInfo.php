@@ -8,7 +8,7 @@ namespace LlmChooser\Model;
  * Metadata read from a GGUF header. Plain value object, not a TypedClass:
  * it is produced by our own reader, never by outside input.
  */
-final class GgufInfo
+final readonly class GgufInfo
 {
 	/**
 	 * @param array<string, mixed> $metadata Scalars, and numeric arrays of <= 4096 items.
@@ -17,10 +17,10 @@ final class GgufInfo
 	 *        headers read before tensor capture existed (old cache entries).
 	 */
 	public function __construct(
-		public readonly int $version,
-		public readonly int $tensor_count,
-		public readonly array $metadata,
-		public readonly array $tensors = [],
+		public int $version,
+		public int $tensor_count,
+		public array $metadata,
+		public array $tensors = [],
 	) {}
 
 	public function get(string $key, mixed $default = null): mixed

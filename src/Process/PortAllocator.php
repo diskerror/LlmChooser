@@ -18,9 +18,9 @@ use RuntimeException;
  * an unparseable file has no readable assigned_port, so its port counts as
  * free. We never reserve ports for presets we cannot read.
  */
-final class PortAllocator
+final readonly class PortAllocator
 {
-	public function __construct(private readonly PresetRepository $presets) {}
+	public function __construct(private PresetRepository $presets) {}
 
 	/** Returns the port to use for $preset and saves it on the preset if newly assigned. */
 	public function portFor(Preset $preset, Engine $engine): int

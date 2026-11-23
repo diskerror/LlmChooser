@@ -13,15 +13,15 @@ use LlmChooser\App;
  * is a constructor argument, so the whole feature is testable without ever
  * touching systemctl, /etc or requiring root.
  */
-final class StartupManager
+final readonly class StartupManager
 {
 	public function __construct(
-		private readonly App $app,
-		private readonly Output $out,
-		private readonly CommandRunner $runner = new CommandRunner(),
-		private readonly string $unit_dir = '/etc/systemd/system',
-		private readonly string $service_user = 'llama',
-		private readonly string $php_binary = PHP_BINARY,
+		private App $app,
+		private Output $out,
+		private CommandRunner $runner = new CommandRunner(),
+		private string $unit_dir = '/etc/systemd/system',
+		private string $service_user = 'llama',
+		private string $php_binary = PHP_BINARY,
 	) {}
 
 	public function unitName(string $preset_id): string

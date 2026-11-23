@@ -27,7 +27,7 @@ use function LlmChooser\Config\writeFileAtomic;
  *
  * Exit codes: 0 ok, 1 failure, 2 usage error, 3 refused by admission.
  */
-final class Cli
+final readonly class Cli
 {
 	private const USAGE = <<<'TXT'
 	Usage: llmchooser <command> [args]
@@ -47,11 +47,11 @@ final class Cli
 	TXT;
 
 	public function __construct(
-		private readonly App $app,
-		private readonly Output $out = new Output(),
-		private readonly ?StartupManager $startup = null,
-		private readonly string $captured_help_path = __DIR__ . '/../../docs/llama-server-help.txt',
-		private readonly string $field_help_path = FieldHints::HELP_FILE,
+		private App $app,
+		private Output $out = new Output(),
+		private ?StartupManager $startup = null,
+		private string $captured_help_path = __DIR__ . '/../../docs/llama-server-help.txt',
+		private string $field_help_path = FieldHints::HELP_FILE,
 	) {}
 
 	/** @param list<string> $args  arguments AFTER the script name. Returns exit code. */

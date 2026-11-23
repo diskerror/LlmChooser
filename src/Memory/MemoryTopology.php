@@ -6,10 +6,10 @@ namespace LlmChooser\Memory;
 
 use InvalidArgumentException;
 
-final class MemoryTopology
+final readonly class MemoryTopology
 {
 	/** @var array<string, Device> keyed by id */
-	public readonly array $devices;
+	public array $devices;
 
 	/** @param list<Device> $devices */
 	public function __construct(array $devices)

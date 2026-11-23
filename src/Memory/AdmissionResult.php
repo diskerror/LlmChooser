@@ -6,15 +6,15 @@ namespace LlmChooser\Memory;
 
 use LlmChooser\Cli\Format;
 
-final class AdmissionResult
+final readonly class AdmissionResult
 {
 	/**
 	 * @param array<string, array{need:int, already:int, available:int}> $per_budget
 	 *        keyed by budget device id (after unified aliasing)
 	 */
 	public function __construct(
-		public readonly bool $fits,
-		public readonly array $per_budget,
+		public bool $fits,
+		public array $per_budget,
 	) {}
 
 	/** Human-readable explanation, one line per budget device. */

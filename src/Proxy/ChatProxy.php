@@ -23,11 +23,11 @@ use LlmChooser\Process\InstanceCollection;
  *   4. exactly one instance is running -> that one
  * Otherwise 400.
  */
-final class ChatProxy
+final readonly class ChatProxy
 {
 	public function __construct(
-		private readonly App $app,
-		private readonly Upstream $upstream = new Upstream(),
+		private App $app,
+		private Upstream $upstream = new Upstream(),
 	) {}
 
 	public function handle(Request $r, Emitter $out): void

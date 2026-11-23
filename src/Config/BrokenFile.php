@@ -11,11 +11,11 @@ namespace LlmChooser\Config;
  * The wording is defined ONCE, here, because the identical string is shown
  * by the CLI, the web UI and the chat-completion error response.
  */
-final class BrokenFile
+final readonly class BrokenFile
 {
 	public function __construct(
-		public readonly string $path,
-		public readonly string $id,
+		public string $path,
+		public string $id,
 	) {}
 
 	/**

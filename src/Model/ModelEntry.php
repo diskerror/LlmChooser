@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace LlmChooser\Model;
 
-final class ModelEntry
+final readonly class ModelEntry
 {
 	/**
 	 * @param string       $path        First (or only) file — the value for --model.
@@ -17,13 +17,13 @@ final class ModelEntry
 	 * @param ?string      $error       Why the header could not be read, or shard set problem.
 	 */
 	public function __construct(
-		public readonly string $path,
-		public readonly string $display_name,
-		public readonly int $size_bytes,
-		public readonly array $shard_paths,
-		public readonly array $sidecars,
-		public readonly ?GgufInfo $info,
-		public readonly ?string $error,
+		public string $path,
+		public string $display_name,
+		public int $size_bytes,
+		public array $shard_paths,
+		public array $sidecars,
+		public ?GgufInfo $info,
+		public ?string $error,
 	) {}
 
 	/** The model's lazily loaded n-gram table, or null if it has none. */

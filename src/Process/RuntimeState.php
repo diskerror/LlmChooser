@@ -15,9 +15,9 @@ use function LlmChooser\Config\ensureDir;
  * All changes go through update(), which holds an exclusive file lock so the
  * web app and the CLI cannot overwrite each other.
  */
-final class RuntimeState
+final readonly class RuntimeState
 {
-	public function __construct(private readonly string $file) {}
+	public function __construct(private string $file) {}
 
 	public function all(): InstanceCollection
 	{
