@@ -70,7 +70,7 @@ final class NgramTable
 	}
 
 	/**
-	 * Text appended to an estimate: " (+95.4 GiB n-grams)" for a separate
+	 * Text appended to an estimate: " (+95.4 GiB)" for a separate
 	 * table of known size, else "" (an embedded table is already inside
 	 * the estimate).
 	 *
@@ -79,12 +79,12 @@ final class NgramTable
 	public function estimateSuffix(callable $format): string
 	{
 		return !$this->embedded && $this->file_bytes !== null
-			? ' (+' . $format($this->file_bytes) . ' n-grams)'
+			? ' (+' . $format($this->file_bytes) . ')'
 			: '';
 	}
 
 	/**
-	 * Text appended to a model size: "*" (embedded), " + 102.4 GB n-grams"
+	 * Text appended to a model size: "*" (embedded), " + 102.4 GB"
 	 * (separate), " + n-grams (missing)" (pointer to a file that isn't there).
 	 *
 	 * @param callable(int):string $format Byte formatter used for the size next to it.
@@ -95,8 +95,19 @@ final class NgramTable
 			return self::SIZE_MARK;
 		}
 		return $this->file_bytes !== null
-			? ' + ' . $format($this->file_bytes) . ' n-grams'
+			? ' + ' . $format($this->file_bytes)
 			: ' + n-grams (missing)';
+	}
+
+	/**
+	 * True when llama-server will read this table on demand instead of
+	 * loading it: embedded, and lazy_mode not 'off' ('auto' is on for
+	 * tensors over 4 GiB, which every n-gram table we know of is). The
+	 * estimator still counts it as resident, so the estimate overstates.
+	 */
+	public function loadsLazily(string $lazy_mode): bool
+	{
+		return $this->embedded && $lazy_mode !== 'off';
 	}
 
 	public function note(): string

@@ -443,8 +443,9 @@ final class WebApp
 		}
 		$ngrams = NgramTable::forPath($preset->model_path);
 		$body = '<table><tr><th>Part</th><th>Bytes</th></tr>' . $rows
-			. '<tr><th>Total</th><th>' . Html::e(Format::humanBytes($alloc->totalBytes())
-				. ($ngrams?->estimateSuffix(Format::humanBytes(...)) ?? '')) . '</th></tr></table>'
+			. '<tr><th>Total</th><th>' . Html::e(Format::humanBytes($alloc->totalBytes())) . Html::lazyMark($preset)
+				. Html::e($ngrams?->estimateSuffix(Format::humanBytes(...)) ?? '') . '</th></tr></table>'
+			. (Html::lazyMark($preset) !== '' ? '<p class="note">* ' . Html::e(Html::LAZY_TITLE) . '.</p>' : '')
 			. ($ngrams !== null ? '<p class="note">' . Html::e(ltrim($ngrams->note(), '*+ ')) . '</p>' : '')
 			. '<h2>Per device</h2><table><tr><th>Device</th><th>Bytes</th></tr>' . $devs . '</table>';
 		return Response::html($this->page($r, 'Estimate ' . $id, $body));
@@ -933,11 +934,14 @@ final class WebApp
 	private function apiPresetEstimate(Request $r): Response
 	{
 		try {
-			$bytes = $this->presetEstimateBytes(new Preset(PresetForm::fromPost($r->post)));
+			$posted = new Preset(PresetForm::fromPost($r->post));
+			$bytes  = $this->presetEstimateBytes($posted);
+			$lazy   = Html::lazyMark($posted) !== '';
 		} catch (Throwable) {
 			$bytes = null;
+			$lazy  = false;
 		}
-		return Response::json(['gb' => $bytes === null ? null : Format::gb($bytes)]);
+		return Response::json(['gb' => $bytes === null ? null : Format::gb($bytes), 'lazy' => $lazy]);
 	}
 
 	private function apiDashboardPanels(): Response
@@ -1077,8 +1081,8 @@ final class WebApp
 				. '<td>' . $this->statusCell($i) . '</td>'
 				. '<td class="num">' . Html::e((string)($i->port ?: '-')) . '</td>'
 				. '<td class="num">' . $this->ctxCell($p) . '</td>'
-				. '<td class="num">' . ($alloc !== null ? Html::e(Format::gb($alloc->totalBytes())
-					. ($p !== null ? NgramTable::forPath($p->model_path)?->estimateSuffix(Format::gb(...)) ?? '' : '')) : '-') . '</td>'
+				. '<td class="num">' . ($alloc !== null ? Html::e(Format::gb($alloc->totalBytes())) . Html::lazyMark($p)
+					. Html::e($p !== null ? NgramTable::forPath($p->model_path)?->estimateSuffix(Format::gb(...)) ?? '' : '') : '-') . '</td>'
 				. '<td>' . ($i->started_at > 0 ? Html::e(Format::duration(time() - $i->started_at)) : '-') . '</td>'
 				. '<td>' . ($i->last_used > 0 ? Html::e(Format::duration(time() - $i->last_used)) . ' ago' : '-') . '</td>'
 				. '<td class="actions">' . $acts . '</td></tr>';
@@ -1123,8 +1127,8 @@ final class WebApp
 			return '-';
 		}
 		try {
-			return Html::e(Format::gb($this->app->memory->estimate($p)->totalBytes())
-				. (NgramTable::forPath($p->model_path)?->estimateSuffix(Format::gb(...)) ?? ''));
+			return Html::e(Format::gb($this->app->memory->estimate($p)->totalBytes())) . Html::lazyMark($p)
+				. Html::e(NgramTable::forPath($p->model_path)?->estimateSuffix(Format::gb(...)) ?? '');
 		} catch (Throwable) {
 			return '?';
 		}

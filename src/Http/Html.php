@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace LlmChooser\Http;
 
+use LlmChooser\Model\NgramTable;
+use LlmChooser\Preset\Preset;
+
 final class Html
 {
 	public static function e(mixed $v): string
@@ -100,5 +103,19 @@ final class Html
 	{
 		return '<input type="hidden" name="' . self::e($name) . '" value="0">'
 			. '<input type="checkbox" name="' . self::e($name) . '" value="1"' . ($checked ? ' checked' : '') . $extra . '>';
+	}
+
+	public const LAZY_TITLE = 'Lazy loading: the n-gram table stays on disk, so real use is lower than this estimate';
+
+	/** "*" after a memory estimate whose n-gram table loads lazily, else ''. */
+	public static function lazyMark(?Preset $p): string
+	{
+		if ($p === null || $p->model_path === '') {
+			return '';
+		}
+		$ngrams = NgramTable::forPath($p->model_path);
+		return $ngrams !== null && $ngrams->loadsLazily($p->args->lazy_mode)
+			? '<span class="lazy-mark" title="' . self::e(self::LAZY_TITLE) . '">*</span>'
+			: '';
 	}
 }

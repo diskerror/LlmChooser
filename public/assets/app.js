@@ -183,7 +183,17 @@ if (modelsTable) {
       try {
         const res = await fetch(span.dataset.url, { method: 'POST', body: new URLSearchParams(new FormData(form)) });
         const data = await res.json();
-        if (mine === seq) span.textContent = data.gb === null ? '?' : data.gb + ' GB';
+        if (mine === seq) {
+          span.textContent = data.gb === null ? '?' : data.gb;
+          if (data.gb !== null && data.lazy) {
+            const mark = document.createElement('span');
+            mark.className = 'lazy-mark';
+            mark.title = span.dataset.lazyTitle;
+            mark.textContent = '*';
+            span.append(mark);
+          }
+          if (data.gb !== null) span.append(' GB');
+        }
       } catch (e) { /* keep the last figure */ }
     }, 300);
   };

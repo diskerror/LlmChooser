@@ -137,8 +137,8 @@ final class PresetForm
 			if ($label === 'Context & memory') {
 				// Running worst-case RAM for this preset (weights + full-ctx KV
 				// + overhead); app.js refreshes it as the form changes.
-				$suffix = ' — <span id="mem-estimate" data-url="/api/preset-estimate">'
-					. ($estimate_bytes !== null ? Html::e(Format::gb($estimate_bytes)) . ' GB' : '?') . '</span> estimated';
+				$suffix = ' — <span id="mem-estimate" data-url="/api/preset-estimate" data-lazy-title="' . Html::e(Html::LAZY_TITLE) . '">'
+					. ($estimate_bytes !== null ? Html::e(Format::gb($estimate_bytes)) . Html::lazyMark($p) . ' GB' : '?') . '</span> estimated';
 			}
 			$out .= '<details><summary>' . Html::e($label) . $suffix . '</summary>';
 			foreach ($names as $name) {
