@@ -190,6 +190,15 @@
         "notes": "For models with a large per-layer embedding or n-gram table (Qwen3.8-Flash-\nNext), `on` leaves that table memory-mapped and reads only the rows a\ntoken needs, so it does not occupy RAM or VRAM; the OS page cache keeps\nthe hot rows. `off` loads it fully resident. `auto` is on for tensors over\n4 GiB. Needs mmap. Not sent to llama-server when `auto`, so builds\nwithout this option still start.",
         "reviewed": "0ea295666e51"
     },
+    "load_mode": {
+        "label": "Load mode",
+        "flag": "-lm, --load-mode",
+        "level": "advanced",
+        "upstream_default": "auto (mmap)",
+        "short": "How the model file is read: memory-mapped (default), locked in RAM, or direct I/O.",
+        "notes": "`auto` memory-maps the model unless a device cannot. A mapped model is\nread from disk as the OS pages it in and can be dropped again, which is\nhow a model larger than RAM can still run (slowly, at disk speed). `mlock`\nand `mmap+mlock` pin the model in RAM; `dio` bypasses the page cache.\n`none`, `mlock` and `dio` do not memory-map, and Lazy tensor loading needs\nmmap: with those the n-gram table would be loaded fully resident. Not\nsent to llama-server when `auto`, so builds without this option still\nstart.",
+        "reviewed": "b7d2187e8b95"
+    },
     "threads": {
         "label": "CPU threads",
         "flag": "-t, --threads",

@@ -23,6 +23,7 @@ class PresetArgs extends TypedClass
 	protected bool   $no_context_shift  = true;
 	protected string $fit               = 'on';
 	protected string $lazy_mode         = 'auto';
+	protected string $load_mode         = 'auto';
 	protected float  $temp              = 0.8;
 	protected int    $top_k             = 20;
 	protected float  $top_p             = 0.95;

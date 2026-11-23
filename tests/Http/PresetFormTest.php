@@ -134,7 +134,8 @@ class PresetFormTest extends TestCase
 		$this->assertArrayNotHasKey('args.repeat_last_n', $e);
 
 		// new select fields reject values outside their domain
-		$e = PresetValidator::validate(new Preset(['id' => 'q', 'name' => 'N', 'engine_id' => 'e', 'model_path' => '/x.gguf', 'args' => ['fit' => 'maybe', 'lazy_mode' => 'sometimes']]), $engines, true, $presets);
+		$e = PresetValidator::validate(new Preset(['id' => 'q', 'name' => 'N', 'engine_id' => 'e', 'model_path' => '/x.gguf', 'args' => ['fit' => 'maybe', 'lazy_mode' => 'sometimes', 'load_mode' => 'sideways']]), $engines, true, $presets);
+		$this->assertSame('Not an allowed value', $e['args.load_mode']);
 		$this->assertSame('Not an allowed value', $e['args.fit']);
 		$this->assertSame('Not an allowed value', $e['args.lazy_mode']);
 
@@ -287,6 +288,20 @@ class PresetFormTest extends TestCase
 		$p = new Preset(['id' => 'p', 'engine_id' => 'e', 'args' => ['temp' => 0.3]]);
 		$html = PresetForm::render($p, $this->models(), false);
 		$this->assertMatchesRegularExpression('/<div class="field-row [^"]*non-default[^"]*">(?:(?!field-row).)*args\[temp\]/s', $html);
+	}
+
+	public function testLoadModeWithoutMmapWarnsUnlessLazyOff(): void
+	{
+		$warn = 'does not memory-map the model';
+		$render = fn(array $args): string => PresetForm::render(new Preset(['id' => 'p', 'engine_id' => 'e', 'args' => $args]), $this->models(), false);
+
+		foreach (['none', 'mlock', 'dio'] as $mode) {
+			$this->assertStringContainsString($warn, $render(['load_mode' => $mode]), $mode);
+		}
+		$this->assertStringNotContainsString($warn, $render(['load_mode' => 'mmap']));
+		$this->assertStringNotContainsString($warn, $render(['load_mode' => 'mmap+mlock']));
+		$this->assertStringNotContainsString($warn, $render([]));
+		$this->assertStringNotContainsString($warn, $render(['load_mode' => 'none', 'lazy_mode' => 'off']));
 	}
 
 	public function testDefaultFieldHasNoDot(): void

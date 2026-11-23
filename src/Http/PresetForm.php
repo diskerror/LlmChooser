@@ -9,6 +9,7 @@ use LlmChooser\Engine\EngineCollection;
 use LlmChooser\Model\ChatTemplateFamily;
 use LlmChooser\Model\GgufReader;
 use LlmChooser\Model\ModelEntry;
+use LlmChooser\Model\NgramTable;
 use LlmChooser\Preset\Preset;
 use LlmChooser\Preset\PresetArgs;
 use ReflectionProperty;
@@ -153,8 +154,13 @@ final class PresetForm
 				} else {
 					$control = self::argControl($name, $value, $help);
 				}
+				$error = self::err($errors, 'args.' . $name);
+				if ($name === 'load_mode' && $error === '' && NgramTable::mmapOff((string)$value) && $p->args->lazy_mode !== 'off') {
+					// Not a validation error (saving is allowed), only a heads-up.
+					$error = 'This load mode does not memory-map the model, but lazy loading needs mmap: an n-gram table would be loaded fully resident. Set Lazy tensor loading to off, or the load mode to auto.';
+				}
 				$out .= self::fieldRow($name, $control,
-					$value, $arg_defaults->{$name}, $help, self::err($errors, 'args.' . $name), $override);
+					$value, $arg_defaults->{$name}, $help, $error, $override);
 			}
 			$out .= '</details>';
 		}

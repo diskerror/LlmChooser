@@ -190,6 +190,21 @@ class CommandBuilderTest extends TestCase
         }
     }
 
+    public function test_load_mode_only_emitted_when_not_auto(): void
+    {
+        $cmd = $this->builder->build(new Preset(['id' => 'p1', 'model_path' => '/m.gguf']), $this->engine(), 5850);
+        $this->assertNotContains('--load-mode', $cmd->argv);
+
+        foreach (['none', 'mmap', 'mlock', 'mmap+mlock', 'dio'] as $mode) {
+            $cmd = $this->builder->build(
+                new Preset(['id' => 'p1', 'model_path' => '/m.gguf', 'args' => ['load_mode' => $mode]]),
+                $this->engine(),
+                5850
+            );
+            $this->assertPair($cmd->argv, '--load-mode', $mode);
+        }
+    }
+
     public function test_missing_model_throws(): void
     {
         $this->expectException(RuntimeException::class);

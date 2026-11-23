@@ -102,12 +102,19 @@ final class NgramTable
 	/**
 	 * True when llama-server will read this table on demand instead of
 	 * loading it: embedded, and lazy_mode not 'off' ('auto' is on for
-	 * tensors over 4 GiB, which every n-gram table we know of is). The
+	 * tensors over 4 GiB, which every n-gram table we know of is) and the
+	 * load mode still memory-maps the file (lazy loading needs mmap). The
 	 * estimator still counts it as resident, so the estimate overstates.
 	 */
-	public function loadsLazily(string $lazy_mode): bool
+	public function loadsLazily(string $lazy_mode, string $load_mode = 'auto'): bool
 	{
-		return $this->embedded && $lazy_mode !== 'off';
+		return $this->embedded && $lazy_mode !== 'off' && !self::mmapOff($load_mode);
+	}
+
+	/** --load-mode values that do not memory-map the model. */
+	public static function mmapOff(string $load_mode): bool
+	{
+		return in_array($load_mode, ['none', 'mlock', 'dio'], true);
 	}
 
 	public function note(): string

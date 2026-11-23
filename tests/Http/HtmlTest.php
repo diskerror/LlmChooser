@@ -47,6 +47,10 @@ class HtmlTest extends TestCase
 			$this->assertSame('', Html::lazyMark($mk('ng.gguf', 'off')));
 			$this->assertSame('', Html::lazyMark($mk('plain.gguf', 'on')));
 			$this->assertSame('', Html::lazyMark(null));
+			$no_mmap = new Preset(['id' => 'p', 'model_path' => $dir . '/ng.gguf', 'args' => ['load_mode' => 'none']]);
+			$this->assertSame('', Html::lazyMark($no_mmap));
+			$mapped = new Preset(['id' => 'p', 'model_path' => $dir . '/ng.gguf', 'args' => ['load_mode' => 'mmap+mlock']]);
+			$this->assertStringContainsString('>*</span>', Html::lazyMark($mapped));
 		}
 		finally {
 			exec('rm -rf ' . escapeshellarg($dir));

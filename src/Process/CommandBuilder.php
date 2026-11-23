@@ -83,6 +83,12 @@ final class CommandBuilder
 			$argv[] = $a->lazy_mode;
 		}
 
+		// Only when set: 'auto' (mmap unless a device can't) is llama.cpp's default.
+		if ($a->load_mode !== 'auto') {
+			$argv[] = '--load-mode';
+			$argv[] = $a->load_mode;
+		}
+
 		$argv[] = '--temp';
 		$argv[] = self::num($a->temp);
 		$argv[] = '--top-k';

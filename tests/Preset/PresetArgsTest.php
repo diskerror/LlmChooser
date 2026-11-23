@@ -25,6 +25,7 @@ class PresetArgsTest extends TestCase
         $this->assertSame(64, $args->repeat_last_n);
         $this->assertSame('on', $args->fit);
         $this->assertSame('auto', $args->lazy_mode);
+        $this->assertSame('auto', $args->load_mode);
     }
 
     public function test_override_changes_only_given_fields(): void

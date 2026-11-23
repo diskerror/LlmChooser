@@ -28,11 +28,12 @@ final class FieldHints
 		'reasoning_effort' => ['default', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
 		'fit'              => ['on', 'off'],
 		'lazy_mode'        => ['auto', 'on', 'off'],
+		'load_mode'        => ['auto', 'none', 'mmap', 'mlock', 'mmap+mlock', 'dio'],
 	];
 
 	/** group label => list of field names; groups render in this order */
 	public const GROUPS = [
-		'Context & memory' => ['ctx_size', 'n_predict', 'batch_size', 'ubatch_size', 'flash_attn', 'cache_type_k', 'cache_type_v', 'parallel', 'no_context_shift', 'fit', 'lazy_mode', 'threads'],
+		'Context & memory' => ['ctx_size', 'n_predict', 'batch_size', 'ubatch_size', 'flash_attn', 'cache_type_k', 'cache_type_v', 'parallel', 'no_context_shift', 'fit', 'lazy_mode', 'load_mode', 'threads'],
 		'GPU'              => ['n_gpu_layers', 'split_mode', 'tensor_split', 'main_gpu'],
 		'Sampling'         => ['temp', 'top_k', 'top_p', 'min_p', 'repeat_penalty', 'repeat_last_n', 'presence_penalty', 'frequency_penalty', 'seed'],
 		'Speculative'      => ['spec_type', 'spec_draft_n_max'],

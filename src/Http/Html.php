@@ -114,7 +114,7 @@ final class Html
 			return '';
 		}
 		$ngrams = NgramTable::forPath($p->model_path);
-		return $ngrams !== null && $ngrams->loadsLazily($p->args->lazy_mode)
+		return $ngrams !== null && $ngrams->loadsLazily($p->args->lazy_mode, $p->args->load_mode)
 			? '<span class="lazy-mark" title="' . self::e(self::LAZY_TITLE) . '">*</span>'
 			: '';
 	}
