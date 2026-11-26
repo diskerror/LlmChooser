@@ -228,6 +228,122 @@ class MemoryEstimatorTest extends TestCase
         $this->assertSame(['cpu'], array_keys($a->per_device));
     }
 
+    // ---- per-tensor placement (resident vs mapped) ----
+
+    /** Fixture with sized tensors: token_embd 1000, 10 x attn_q 100, output 500 (all F16). */
+    private function tensorModel(string $path, ?array $only_layers = null, bool $with_globals = true): void
+    {
+        $t = [];
+        if ($with_globals) {
+            $t[] = ['token_embd.weight', [8, 8], 1, 1000];
+        }
+        foreach ($only_layers ?? range(0, self::BLOCKS - 1) as $i) {
+            $t[] = ["blk.{$i}.attn_q.weight", [4, 4], 1, 100];
+        }
+        if ($with_globals) {
+            $t[] = ['output.weight', [4, 8], 1, 500];
+        }
+        GgufFixture::write($path, [
+            ['general.architecture', GgufReader::T_STRING, 'llama'],
+            ['llama.block_count', GgufReader::T_UINT32, self::BLOCKS],
+            ['llama.context_length', GgufReader::T_UINT32, self::CTX],
+            ['llama.embedding_length', GgufReader::T_UINT32, self::EMBED],
+            ['llama.attention.head_count', GgufReader::T_UINT32, 4],
+            ['llama.attention.head_count_kv', GgufReader::T_UINT32, self::HEADS_KV],
+            ['llama.attention.key_length', GgufReader::T_UINT32, self::KLEN],
+            ['llama.attention.value_length', GgufReader::T_UINT32, self::KLEN],
+        ], count($t), 0, 3, $t);
+    }
+
+    public function test_tensor_placement_all_gpu_maps_only_the_input_layer(): void
+    {
+        $this->tensorModel($this->model);
+        $a = $this->est->estimate($this->preset(), GgufReader::read($this->model), $this->unified());
+
+        $this->assertSame(1000 + 500, $a->breakdown['weights']);
+        $this->assertSame(['weights' => 1000], $a->mapped);
+        $this->assertSame(1000, $a->mappedBytes());
+        $this->assertSame(array_sum($a->breakdown), $a->totalBytes());
+        $this->assertSame(['gpu0'], array_keys($a->per_device));
+        $this->assertSame([], $a->notes);
+    }
+
+    public function test_tensor_placement_dev_none_maps_all_weights(): void
+    {
+        $this->tensorModel($this->model);
+        $a = $this->est->estimate($this->preset(['extra_flags' => '-dev none']), GgufReader::read($this->model), $this->unified());
+
+        $this->assertSame(0, $a->breakdown['weights']);
+        $this->assertSame(2500, $a->mappedBytes());
+        // nothing on the GPU: KV and buffers go to the CPU too
+        $this->assertSame(['cpu'], array_keys($a->per_device));
+        $this->assertSame($a->totalBytes(), $a->per_device['cpu']);
+    }
+
+    public function test_tensor_placement_partial_offload_puts_weights_where_tensors_are(): void
+    {
+        $this->tensorModel($this->model);
+        $a = $this->est->estimate(
+            $this->preset(['n_gpu_layers' => '5', 'split_mode' => 'none', 'main_gpu' => 1]),
+            GgufReader::read($this->model),
+            $this->twoDiscrete()
+        );
+        // ngl 5 = output + layers 6..9; layers 0..5 and token_embd stay mapped
+        $gpu_weights = 500 + 4 * 100;
+        $this->assertSame($gpu_weights, $a->breakdown['weights']);
+        $this->assertSame(1000 + 6 * 100, $a->mappedBytes());
+        $rest = $a->totalBytes() - $gpu_weights;
+        $this->assertSame($gpu_weights + (int)round($rest * 0.5), $a->per_device['gpu1']);
+        $this->assertSame($a->totalBytes(), array_sum($a->per_device));
+    }
+
+    public function test_tensor_placement_no_mmap_keeps_cpu_weights_resident_on_cpu(): void
+    {
+        $this->tensorModel($this->model);
+        $a = $this->est->estimate(
+            $this->preset(['n_gpu_layers' => '0', 'load_mode' => 'none']),
+            GgufReader::read($this->model),
+            $this->twoDiscrete()
+        );
+        $this->assertSame(2500, $a->breakdown['weights']);
+        $this->assertSame(0, $a->mappedBytes());
+        $this->assertSame(['cpu'], array_keys($a->per_device));
+    }
+
+    public function test_tensor_placement_reads_every_shard(): void
+    {
+        $one = $this->dir . '/s-00001-of-00002.gguf';
+        $two = $this->dir . '/s-00002-of-00002.gguf';
+        $this->tensorModel($one, range(0, 4));
+        $this->tensorModel($two, range(5, 9), false);
+        $a = $this->est->estimate(
+            new Preset(['id' => 's', 'model_path' => $one, 'args' => ['extra_flags' => '-dev none']]),
+            GgufReader::read($one),
+            $this->unified()
+        );
+        $this->assertSame(1000 + 10 * 100 + 500, $a->mappedBytes());
+    }
+
+    public function test_override_tensor_note_and_all_resident(): void
+    {
+        $this->tensorModel($this->model);
+        $a = $this->est->estimate($this->preset(['extra_flags' => '-ot exps=CPU']), GgufReader::read($this->model), $this->unified());
+        $this->assertSame(2500, $a->breakdown['weights']);
+        $this->assertSame(0, $a->mappedBytes());
+        $this->assertSame([\LlmChooser\Memory\WeightPlacement::OT_NOTE], $a->notes);
+    }
+
+    public function test_allocation_from_array_accepts_rows_without_mapped(): void
+    {
+        $old = \LlmChooser\Memory\Allocation::fromArray(['per_device' => ['cpu' => '5'], 'breakdown' => ['weights' => 5]]);
+        $this->assertSame([], $old->mapped);
+        $this->assertSame(0, $old->mappedBytes());
+
+        $this->tensorModel($this->model);
+        $a = $this->est->estimate($this->preset(), GgufReader::read($this->model), $this->unified());
+        $this->assertEquals($a, \LlmChooser\Memory\Allocation::fromArray($a->toArray()));
+    }
+
     // ---- kvBytesPer1k (Phase 12 drawer) ----
 
     public function test_kv_bytes_per_1k_f16_vs_q4_0(): void

@@ -21,8 +21,8 @@ Run CLI commands as the llama user so file ownership stays consistent:
 
     sudo -u llama php /opt/llmchooser/bin/llmchooser health
 
-`bin/llmchooser` is `#!/usr/bin/env php`; if `php` on your `PATH` is 8.1+, it
-can be run directly. It refuses to start under PHP < 8.1.
+`bin/llmchooser` is `#!/usr/bin/env php`; if `php` on your `PATH` is 8.2+, it
+can be run directly. It refuses to start under PHP < 8.2.
 
 Engine binary: storage/engines/llama-ngram.json points at
 /opt/llama.cpp-ngrams/build/bin/llama-server. LlmChooser sets

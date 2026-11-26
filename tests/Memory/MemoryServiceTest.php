@@ -54,4 +54,26 @@ class MemoryServiceTest extends TestCase
         $this->assertTrue($result->fits);
         $this->assertSame(['cpu'], array_keys($result->per_budget));
     }
+
+    public function test_streams_when_mapped_exceeds_ram_left_after_resident(): void
+    {
+        $topo = new MemoryTopology([
+            new Device('cpu', Device::KIND_RAM, 100, 100),
+            new Device('gpu0', Device::KIND_VRAM, 10, 10, 'cpu'),
+        ]);
+        $svc = new MemoryService(new FixedTopologyProbe($topo));
+
+        $none = new \LlmChooser\Memory\Allocation(['gpu0' => 60], ['weights' => 60]);
+        $this->assertFalse($svc->streams($none));
+        // 100 available - 60 resident (unified gpu0 counts against cpu) = 40 left
+        $this->assertFalse($svc->streams(new \LlmChooser\Memory\Allocation(['gpu0' => 60], ['weights' => 60], ['ngrams' => 40])));
+        $this->assertTrue($svc->streams(new \LlmChooser\Memory\Allocation(['gpu0' => 60], ['weights' => 60], ['ngrams' => 41])));
+
+        // a discrete GPU does not use the cpu budget
+        $discrete = new MemoryService(new FixedTopologyProbe(new MemoryTopology([
+            new Device('cpu', Device::KIND_RAM, 100, 100),
+            new Device('gpu0', Device::KIND_VRAM, 80, 80),
+        ])));
+        $this->assertFalse($discrete->streams(new \LlmChooser\Memory\Allocation(['gpu0' => 60], ['weights' => 60], ['weights' => 90])));
+    }
 }

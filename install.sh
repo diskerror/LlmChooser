@@ -1,5 +1,5 @@
 #!/bin/bash
-# LlmChooser installer for Debian/Ubuntu. Installs the service files from
+# LlmChooser installer for Debian/Ubuntu and macOS. Installs the service files from
 # deploy/ with your user, directory, port and worker count filled in, and
 # sets the permissions on storage/.
 #
@@ -13,6 +13,9 @@
 #                script: ~/.config/systemd/user/llmchooser.service. No sudo;
 #                suits an install in your home directory.
 # --mode nginx   Option B: nginx + a dedicated php-fpm pool running as --user.
+# --mode launchd macOS (the default and only mode there): a per-user launchd
+#                agent, ~/Library/LaunchAgents/com.llmchooser.plist. No sudo.
+# --php PATH     PHP binary to run it with (default: php on PATH).
 # --user NAME    Service user for php-s and nginx (default: llama).
 # --port N       Port to listen on (default: 1234).
 # --workers N    Requests served at once (default: 8).
@@ -21,12 +24,15 @@
 #                skips systemctl, nginx and user/ownership changes.
 #
 # It never installs packages or changes package sources: it checks for what
-# it needs and prints the apt command if something is missing. Existing files
+# it needs and prints the apt/port/brew command if something is missing. Existing files
 # are not overwritten: a differing file is left alone and the new version is
 # written next to it as *.new for you to compare.
 set -euo pipefail
 
+OS=$(uname -s)
 MODE=php-s
+[ "$OS" = Darwin ] && MODE=launchd
+PHP=
 SVC_USER=llama
 PORT=1234
 WORKERS=8
@@ -44,19 +50,24 @@ while [ $# -gt 0 ]; do
 		--user)    SVC_USER=$2; shift ;;
 		--port)    PORT=$2; shift ;;
 		--workers) WORKERS=$2; shift ;;
+		--php)     PHP=$2; shift ;;
 		--dry-run) DRY=1 ;;
 		--root)    ROOT=$2; shift ;;
-		-h|--help) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+		-h|--help) sed -n '2,29p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
 		*) die "unknown option $1 (see --help)" ;;
 	esac
 	shift
 done
 
-case "$MODE" in php-s|user|nginx) ;; *) die "--mode must be php-s, user or nginx" ;; esac
+if [ "$OS" = Darwin ]; then
+	[ "$MODE" = launchd ] || die "on macOS only --mode launchd is supported"
+else
+	case "$MODE" in php-s|user|nginx) ;; *) die "--mode must be php-s, user or nginx" ;; esac
+fi
 [[ "$PORT" =~ ^[0-9]+$ ]] || die "--port must be a number"
 [[ "$WORKERS" =~ ^[0-9]+$ ]] && [ "$WORKERS" -ge 2 ] || die "--workers must be 2 or more"
-if [ "$MODE" = user ]; then
-	[ "$(id -u)" != 0 ] || die "--mode user installs for the user running it: run it without sudo"
+if [ "$MODE" = user ] || [ "$MODE" = launchd ]; then
+	[ "$(id -u)" != 0 ] || die "--mode $MODE installs for the user running it: run it without sudo"
 	SVC_USER=$(id -un)
 else
 	[[ "$SVC_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] || die "--user is not a valid user name"
@@ -68,15 +79,19 @@ fi
 # ---------------------------------------------------------------- checks
 say "Checking requirements"
 missing=()
-command -v php >/dev/null || missing+=(php-cli)
-if command -v php >/dev/null; then
-	PHPV=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')
-	php -r 'exit(PHP_VERSION_ID >= 80100 ? 0 : 1);' || die "PHP $PHPV found; 8.1 or newer is required"
+PHP=${PHP:-$(command -v php || true)}
+[ -n "$PHP" ] && [ -x "$PHP" ] || { PHP=; missing+=(php-cli); }
+if [ -n "$PHP" ]; then
+	PHPV=$("$PHP" -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')
+	"$PHP" -r 'exit(PHP_VERSION_ID >= 80200 ? 0 : 1);' || die "PHP $PHPV found; 8.2 or newer is required"
 	# pcntl and posix come with php-cli on Debian/Ubuntu (no separate package).
+	# Capture first: `php -m | grep -q` under pipefail fails when grep exits
+	# early and php gets SIGPIPE.
+	MODS=$("$PHP" -m)
 	for ext in curl intl pcntl posix; do
-		php -m | grep -qix "$ext" || missing+=("php-$ext")
+		grep -qix "$ext" <<<"$MODS" || missing+=("php-$ext")
 	done
-	echo "    PHP $PHPV"
+	echo "    PHP $PHPV ($PHP)"
 fi
 
 if [ "$MODE" = nginx ]; then
@@ -86,7 +101,15 @@ fi
 
 if [ ${#missing[@]} -gt 0 ]; then
 	echo "    Missing: ${missing[*]}"
-	echo "    Install with: sudo apt install ${missing[*]}"
+	if [ "$OS" = Darwin ]; then
+		v=${PHPV:-8.4}; v=${v/./}
+		exts=" ${missing[*]} "; exts=${exts/ php-cli / }
+		echo "    MacPorts: sudo port install php$v$(echo $exts | sed "s/php-/ php$v-/g; s/^/ /; s/  */ /g" | sed 's/ $//')"
+		echo "    Homebrew: brew install php   (includes curl, intl, pcntl, posix)"
+		echo "    Then rerun, with --php PATH if it is not the php on your PATH."
+	else
+		echo "    Install with: sudo apt install ${missing[*]}"
+	fi
 	die "install the missing packages, then run this again"
 fi
 
@@ -96,7 +119,10 @@ fi
 
 # ---------------------------------------------------------------- user
 say "Service user: $SVC_USER"
-if [ "$MODE" = user ]; then
+if [ "$MODE" = launchd ]; then
+	command -v llama-server >/dev/null \
+		|| echo "    NOTE: no llama-server on PATH; set each engine's binary path in the UI (MacPorts/Homebrew: llama.cpp)"
+elif [ "$MODE" = user ]; then
 	for g in video render; do   # GPU access for the models it starts
 		if getent group "$g" >/dev/null && ! id -nG | grep -qw "$g"; then
 			echo "    NOTE: you are not in group $g; models may not see the GPU."
@@ -118,7 +144,8 @@ fi
 
 # Vulkan/Mesa keeps its shader cache in ~/.cache; without it every model
 # start logs a permission error and runs without the cache.
-HOME_DIR=$(getent passwd "$SVC_USER" | cut -d: -f6 || true)
+HOME_DIR=
+[ "$MODE" = launchd ] || HOME_DIR=$(getent passwd "$SVC_USER" | cut -d: -f6 || true)
 if [ -n "$HOME_DIR" ] && [ ! -d "$HOME_DIR/.cache" ]; then
 	echo "    creating $HOME_DIR/.cache"
 	if [ "$MODE" = user ]; then
@@ -134,7 +161,7 @@ fi
 # The app itself creates new files with umask 027 to keep it that way.
 say "storage/: owner $SVC_USER, directories 750, files 640"
 STORAGE="$APP_DIR/storage"
-if [ "$MODE" = user ]; then
+if [ "$MODE" = user ] || [ "$MODE" = launchd ]; then
 	if [ -n "$(find "$STORAGE" ! -user "$SVC_USER" -print -quit)" ]; then
 		die "some files in $STORAGE are not owned by $SVC_USER; fix with: sudo chown -R $SVC_USER: $STORAGE"
 	fi
@@ -142,7 +169,7 @@ else
 	run chown -R "$SVC_USER:" "$STORAGE"
 fi
 
-if [ "$DRY" = 1 ] || { [ -n "$ROOT" ] && [ "$MODE" != user ]; }; then
+if [ "$DRY" = 1 ] || { [ -n "$ROOT" ] && [ "$MODE" != user ] && [ "$MODE" != launchd ]; }; then
 	echo "    (skip) chmod"
 else
 	find "$STORAGE" -type d -exec chmod 750 {} +
@@ -158,8 +185,10 @@ render() {
 	    -e "s#^user = llama#user = $SVC_USER#; s#^group = llama#group = $SVC_USER#" \
 	    -e "s#0\.0\.0\.0:1234#0.0.0.0:$PORT#; s#listen 1234;#listen $PORT;#" \
 	    -e "s#PHP_CLI_SERVER_WORKERS=8#PHP_CLI_SERVER_WORKERS=$WORKERS#; s#^pm.max_children = 8#pm.max_children = $WORKERS#" \
-	    -e "s#/usr/bin/php #$(command -v php) #" \
+	    -e "s#/usr/bin/php #$PHP #" \
 	    -e "s#/etc/php/8\.4/#/etc/php/$PHPV/#g; s#php8\.4-fpm#php$PHPV-fpm#g" \
+	    -e "s#/Users/you/llmchooser#$APP_DIR#g; s#<string>/opt/local/bin/php84</string>#<string>$PHP</string>#" \
+	    -e "s#<string>8</string>#<string>$WORKERS</string>#" \
 	    "$APP_DIR/deploy/$1"
 }
 changed=0
@@ -212,6 +241,27 @@ user)
 			echo "    could not enable linger; run: sudo loginctl enable-linger $SVC_USER"
 		fi
 	fi
+	;;
+launchd)
+	say "macOS launchd agent: php -S with $WORKERS workers on port $PORT"
+	if command -v lsof >/dev/null && lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+		pid=$(lsof -t -nP -iTCP:"$PORT" -sTCP:LISTEN 2>/dev/null | head -1)
+		name=$(ps -o comm= -p "$pid" 2>/dev/null || true)
+		echo "    WARNING: port $PORT is already in use by: ${name##*/}"
+		echo "             LM Studio's server also defaults to 1234. Stop it, or use --port."
+	fi
+	place com.llmchooser.plist "$HOME/Library/LaunchAgents/com.llmchooser.plist"
+	domain="gui/$(id -u)"
+	if [ "$changed" = 1 ]; then
+		if launchctl print "$domain/com.llmchooser" >/dev/null 2>&1; then
+			run launchctl bootout "$domain/com.llmchooser"
+		fi
+		run launchctl bootstrap "$domain" "$HOME/Library/LaunchAgents/com.llmchooser.plist"
+	else
+		echo "    not loading: run 'launchctl bootstrap $domain ~/Library/LaunchAgents/com.llmchooser.plist' once the plist is as you want it"
+	fi
+	echo "    stop it with: launchctl bootout $domain/com.llmchooser   (running models keep running)"
+	echo "    logs: $APP_DIR/storage/logs/launchd.log"
 	;;
 nginx)
 	say "Option B: nginx + php$PHPV-fpm pool 'llmchooser' on port $PORT"

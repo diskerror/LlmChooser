@@ -36,6 +36,31 @@ final class MemoryService
 		return $this->estimator->estimate($preset, GgufReader::read($preset->model_path), $this->topology());
 	}
 
+	/**
+	 * True when the mapped part of $a is larger than the RAM left once its
+	 * resident part is placed: it will stream from disk (warn, never refuse).
+	 * Uses the last detected topology (admit() refreshes it).
+	 */
+	public function streams(Allocation $a): bool
+	{
+		$mapped = $a->mappedBytes();
+		if ($mapped === 0) {
+			return false;
+		}
+		$t   = $this->topology();
+		$cpu = $t->devices['cpu'] ?? null;
+		if ($cpu === null) {
+			return false;
+		}
+		$need = 0;
+		foreach ($a->per_device as $device => $bytes) {
+			if ($t->budgetId($device) === 'cpu') {
+				$need += $bytes;
+			}
+		}
+		return $mapped > $cpu->available_bytes - $need;
+	}
+
 	/** @param list<Allocation> $running */
 	public function admit(Preset $preset, array $running): AdmissionResult
 	{

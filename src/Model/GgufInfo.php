@@ -12,9 +12,11 @@ final readonly class GgufInfo
 {
 	/**
 	 * @param array<string, mixed> $metadata Scalars, and numeric arrays of <= 4096 items.
-	 * @param list<array{name:string, dims:list<int>, type:int}> $tensors
-	 *        Per-tensor header info (name, shape, ggml type). Empty for
-	 *        headers read before tensor capture existed (old cache entries).
+	 * @param list<array{name:string, dims:list<int>, type:int, bytes?:int}> $tensors
+	 *        Per-tensor header info (name, shape, ggml type, bytes in the
+	 *        file). Empty for headers read before tensor capture existed (old
+	 *        cache entries); 'bytes' is absent in cache entries written before
+	 *        it existed and when the offsets didn't fit the file.
 	 */
 	public function __construct(
 		public int $version,
@@ -193,6 +195,20 @@ final readonly class GgufInfo
 			$sum += $n;
 		}
 		return $sum;
+	}
+
+	/** True when every tensor carries its byte size (see GgufReader). */
+	public function hasTensorBytes(): bool
+	{
+		if ($this->tensors === []) {
+			return false;
+		}
+		foreach ($this->tensors as $t) {
+			if (!isset($t['bytes'])) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	public function toArray(): array

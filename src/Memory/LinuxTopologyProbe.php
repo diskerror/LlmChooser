@@ -12,8 +12,7 @@ use RuntimeException;
  *
  * Both roots are constructor arguments and command execution is injected, so
  * the whole thing is testable against fake directories without touching the
- * host. Only the Linux path is implemented; macOS/Windows detection is not a
- * goal (LlmChooser runs its instances on the Linux box).
+ * host. macOS: see MacTopologyProbe.
  */
 final class LinuxTopologyProbe implements TopologyProbe
 {
@@ -83,7 +82,7 @@ final class LinuxTopologyProbe implements TopologyProbe
 	 *
 	 * @return Closure(array):?string
 	 */
-	private static function defaultRunner(): Closure
+	public static function defaultRunner(): Closure
 	{
 		return static function (array $argv): ?string {
 			$descriptors = [1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'w']];

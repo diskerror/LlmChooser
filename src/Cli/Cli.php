@@ -8,7 +8,6 @@ use LlmChooser\App;
 use LlmChooser\Engine\HelpParser;
 use LlmChooser\Http\FieldHints;
 use LlmChooser\Memory\Allocation;
-use LlmChooser\Model\NgramTable;
 use LlmChooser\Process\AdmissionException;
 use LlmChooser\Process\HealthChecker;
 use LlmChooser\Process\Instance;
@@ -38,6 +37,9 @@ final readonly class Cli
 	  health  [<preset-id>] [--lines=N]        summary table, or details for one preset
 	  list                                     list presets
 	  models                                   list discovered model files
+	  untracked                                list untracked llama-server processes (and their preset, if adoptable)
+	  adopt   <pid>                            take over an untracked server as its preset's instance
+	  kill    <pid>                            stop an untracked server
 	  enable  <preset-id>                      allow this preset to be offered/started
 	  disable <preset-id>                      park this preset (stop first if running)
 	  help-drift   <llama-server>              diff --help against the captured copy
@@ -111,6 +113,9 @@ final readonly class Cli
 			'health'  => $this->health($pos, $opts),
 			'list'    => $this->listPresets(isset($opts['enabled'])),
 			'models'  => $this->models(),
+			'untracked' => $this->untracked(),
+			'adopt'   => $this->adopt($this->needPid($pos)),
+			'kill'    => $this->killUntracked($this->needPid($pos)),
 			'enable'  => $this->setEnabled($this->needId($pos), true),
 			'disable' => $this->setEnabled($this->needId($pos), false),
 			'help-drift'   => $this->helpDrift($pos),
@@ -119,6 +124,48 @@ final readonly class Cli
 			'remove-startup' => $this->startupCmd('remove', $pos),
 			default => $this->unknown($command),
 		};
+	}
+
+	/** @param list<string> $pos */
+	private function needPid(array $pos): int
+	{
+		if (!isset($pos[0]) || !ctype_digit($pos[0])) {
+			throw new UsageException('Missing or invalid <pid>');
+		}
+		return (int)$pos[0];
+	}
+
+	private function untracked(): int
+	{
+		$orphans = $this->app->processes->orphans();
+		if ($orphans === []) {
+			$this->out->line('No untracked servers.');
+			return 0;
+		}
+		foreach ($orphans as $o) {
+			$this->out->line(sprintf('%d  port %s  %s  %s', $o['pid'], $o['port'], $o['model'],
+				$o['adopt'] !== null
+					? 'adoptable as ' . $o['adopt'] . ($o['differs'] ? ' (settings differ from the preset)' : '')
+					: 'kill only' . ($o['alias'] !== '' ? " (alias {$o['alias']}: unknown or already running)" : '')));
+		}
+		return 0;
+	}
+
+	private function adopt(int $pid): int
+	{
+		$i = $this->app->processes->adopt($pid);
+		$this->out->line("Adopted {$i->preset_id}: pid {$i->pid}, port {$i->port}" . ($i->message !== '' ? " — {$i->message}" : ''));
+		return 0;
+	}
+
+	private function killUntracked(int $pid): int
+	{
+		if ($this->app->processes->killOrphans($pid) === 0) {
+			$this->out->error("PID {$pid} is not an untracked server");
+			return 1;
+		}
+		$this->out->line("Stopped {$pid}");
+		return 0;
 	}
 
 	private function usage(): int
@@ -440,6 +487,9 @@ final readonly class Cli
 		foreach ($alloc?->breakdown ?? [] as $k => $v) {
 			$break[] = $k . ' ' . Format::humanBytes((int)$v);
 		}
+		foreach ($alloc?->mapped ?? [] as $k => $v) {
+			$break[] = 'mapped ' . $k . ' ' . Format::humanBytes((int)$v);
+		}
 
 		$health = new HealthChecker();
 		[$state, $body] = $health->check($i->host, $i->port, 1.0);
@@ -454,7 +504,8 @@ final readonly class Cli
 		$this->out->line('started: ' . ($i->started_at > 0 ? date('Y-m-d H:i:s', $i->started_at) : '-'));
 		$this->out->line('uptime: ' . ($i->started_at > 0 ? Format::duration(time() - $i->started_at) : '-'));
 		$this->out->line('estimate: ' . ($alloc === null ? '-' : Format::humanBytes($alloc->totalBytes())
-			. (NgramTable::forPath($this->modelPathOf($id))?->estimateSuffix(Format::humanBytes(...)) ?? '')) . ($break === [] ? '' : ' (' . implode(', ', $break) . ')'));
+			. ($alloc->mappedBytes() > 0 ? ' + ' . Format::humanBytes($alloc->mappedBytes()) . ' mapped'
+				. ($alloc->read_per_token > 0 ? ' (~' . Format::humanBytes($alloc->read_per_token) . ' read/token uncached)' : '') : '')) . ($break === [] ? '' : ' (' . implode(', ', $break) . ')'));
 		$this->out->line('rss: ' . Format::humanBytes((new ProcessControl())->rssBytes($i->pid)));
 		$this->out->line("health: {$state}" . ($body !== '' ? ' ' . $body : ''));
 		$this->out->line("command: {$i->command}");
@@ -464,16 +515,6 @@ final readonly class Cli
 		$this->out->line(Format::tail($i->log_file, $lines));
 
 		return 0;
-	}
-
-	/** The preset's model path, or "" if the preset can't be loaded. */
-	private function modelPathOf(string $id): string
-	{
-		try {
-			return $this->app->presets->load($id)->model_path;
-		} catch (Throwable) {
-			return '';
-		}
 	}
 
 	private function listPresets(bool $only_enabled = false): int

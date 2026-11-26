@@ -13,6 +13,7 @@ use LlmChooser\Http\WebApp;
 use LlmChooser\Memory\Device;
 use LlmChooser\Memory\FixedTopologyProbe;
 use LlmChooser\Memory\MemoryTopology;
+use LlmChooser\Model\GgufReader;
 use LlmChooser\Preset\Preset;
 use LlmChooser\Preset\PresetRepository;
 use LlmChooser\Process\Instance;
@@ -300,6 +301,31 @@ class WebAppTest extends TestCase
 		$this->assertFalse($this->app->presets->load('p1')->enabled);
 	}
 
+	public function testUntrackedServerCanBeAdoptedByAlias(): void
+	{
+		$this->post('/presets/p1/start');
+		$pid = $this->app->processes->waitUntilReady('p1', 30)->pid;
+		// lose track of it
+		$this->app->state->update(static function ($c): void {
+			unset($c['p1']);
+		});
+		// The fake binary is a wrapper that execs php on the fixture script, so
+		// ps shows the script, not the engine binary: list it via a binary override.
+		$p2 = $this->app->presets->load('p2');
+		$p2->binary_path = dirname(__DIR__) . '/Fixtures/fake-llama-server.php';
+		$this->app->presets->save($p2);
+
+		$body = $this->get('/')->body;
+		$this->assertStringContainsString('/orphans/adopt?pid=' . $pid, $body);
+		$this->assertStringContainsString('/orphans/kill?pid=' . $pid, $body);
+
+		$res = $this->web->handle(new Request('POST', '/orphans/adopt', ['pid' => (string)$pid]));
+		$this->assertSame(303, $res->status);
+		$this->assertStringContainsString('Adopted%20p1', $res->headers['Location']);
+		$this->assertSame($pid, $this->app->state->get('p1')->pid);
+		$this->assertStringNotContainsString('/orphans/adopt', $this->get('/')->body);
+	}
+
 	public function testEnableRouteEnables(): void
 	{
 		$this->post('/presets/p1/disable');
@@ -411,7 +437,7 @@ class WebAppTest extends TestCase
 			}
 		};
 		$web    = new WebApp($this->app, $probe);
-		$loaded = $this->section($web->handle(new \LlmChooser\Http\Request('GET', '/', [], [], []))->body, 'Loaded');
+		$loaded = $this->section($web->handle(new Request('GET', '/', [], [], []))->body, 'Loaded');
 		$this->assertStringContainsString('badge-busy">generating · 42 tok · 7.5 t/s', $loaded);
 		$this->assertStringContainsString('badge-warn">ctx peak 62.5K/64K', $loaded);
 		$this->assertStringNotContainsString('badge-ready', $loaded);
@@ -442,6 +468,37 @@ class WebAppTest extends TestCase
 		$data = json_decode($res->body, true);
 		$this->assertMatchesRegularExpression('/^\d+\.\d$/', $data['gb']);
 		$this->assertNull(json_decode($this->post('/api/preset-estimate', [])->body, true)['gb']);
+	}
+
+	public function testMappedPartShownOnFormApiEstimateAndDashboard(): void
+	{
+		// No GPU in this topology: the F16 tensor stays on the CPU, memory-mapped.
+		$model = $this->dir . '/models/t.gguf';
+		GgufFixture::write($model, [
+			['general.architecture', GgufReader::T_STRING, 'llama'],
+			['llama.block_count', GgufReader::T_UINT32, 1],
+			['llama.context_length', GgufReader::T_UINT32, 256],
+			['llama.embedding_length', GgufReader::T_UINT32, 64],
+			['llama.attention.head_count', GgufReader::T_UINT32, 1],
+		], 1, 0, 3, [['blk.0.attn_q.weight', [8, 8], 1, 4096]]);
+		(new PresetRepository($this->dir . '/storage/presets'))->save(new Preset(['id' => 'p3', 'name' => 'P3', 'engine_id' => 'e', 'model_path' => $model]));
+
+		$this->assertMatchesRegularExpression('#<span id="mem-estimate"[^>]*>[\d.]+ GB <span class="mapped"[^>]*>\+ 0\.0 GB mapped</span>#u', $this->get('/presets/p3/edit')->body);
+		$this->assertStringContainsString('<span class="mapped"', $this->get('/')->body);
+		$page = $this->post('/presets/p3/estimate')->body;
+		$this->assertStringContainsString('<h2>Memory-mapped</h2>', $page);
+		$this->assertStringContainsString('<td>weights</td><td>4096 B</td>', $page);
+
+		$data = json_decode($this->post('/api/preset-estimate', ['model_path' => $model])->body, true);
+		$this->assertSame('0.0', $data['mapped']);
+		$this->assertFalse($data['streams']);
+		$plain = json_decode($this->post('/api/preset-estimate', ['model_path' => $this->dir . '/models/m.gguf'])->body, true);
+		$this->assertNull($plain['mapped']);
+
+		// RAM smaller than the resident part: the mapped part would stream
+		$tight = new WebApp($this->makeApp(0.5));
+		$res   = $tight->handle(new Request('POST', '/api/preset-estimate', [], ['model_path' => $model]));
+		$this->assertTrue(json_decode($res->body, true)['streams']);
 	}
 
 	public function testMemoryPanelColumnsAndLiveFragment(): void

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  macOS: LlmChooser as a per-user launchd agent (PHP's built-in server).
+  Copy to ~/Library/LaunchAgents/com.llmchooser.plist, set the PHP path,
+  WorkingDirectory and port (1234 is also LM Studio's default — quit its
+  server first), then:
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.llmchooser.plist
+  Stop / reload after edits:
+    launchctl bootout gui/$(id -u)/com.llmchooser
+  Logs: <WorkingDirectory>/storage/logs/launchd.log (absolute path below)
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.llmchooser</string>
+	<key>WorkingDirectory</key>
+	<string>/Users/you/llmchooser</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/opt/local/bin/php84</string>
+		<string>-S</string>
+		<string>0.0.0.0:1234</string>
+		<string>-t</string>
+		<string>public</string>
+		<string>public/index.php</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<!-- One worker per simultaneous request; a streaming chat holds one throughout. -->
+		<key>PHP_CLI_SERVER_WORKERS</key>
+		<string>8</string>
+	</dict>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<dict>
+		<key>SuccessfulExit</key>
+		<false/>
+	</dict>
+	<!-- Stopping or reloading LlmChooser must NOT stop running models
+	     (macOS has no setsid; this is launchd's KillMode=process). -->
+	<key>AbandonProcessGroup</key>
+	<true/>
+	<key>StandardOutPath</key>
+	<string>/Users/you/llmchooser/storage/logs/launchd.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/you/llmchooser/storage/logs/launchd.log</string>
+</dict>
+</plist>

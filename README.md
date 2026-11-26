@@ -47,6 +47,8 @@ and see what it costs in memory before you load it.
 You also need a built `llama-server` (llama.cpp) on the machine that will run
 the models.
 
+Runs on Linux and on Apple Silicon macOS (see [macOS](#macos)).
+
 ## Installing (Debian / Ubuntu)
 
 Requirements, all from the distribution's own packages (no extra package
@@ -179,6 +181,41 @@ loginctl enable-linger      # keep running after logout; start at boot
 Your user needs to be in `video` and `render` for GPU access
 (`sudo usermod -aG video,render $USER`, then log in again). Logs:
 `journalctl --user -u llmchooser`.
+
+## macOS
+
+Apple Silicon only (unified memory, Metal). Requirements: PHP 8.2+ with
+`curl` and `intl` (MacPorts `php84` + `php84-curl` + `php84-intl`, or
+Homebrew `php`), Composer, and `llama-server` (MacPorts/Homebrew `llama.cpp`,
+or your own build).
+
+Run it as a per-user launchd agent. In the project directory, after
+`composer install --no-dev`:
+
+```bash
+./install.sh                       # --port N, --workers N, --php PATH, --dry-run
+```
+
+It checks PHP and its extensions (printing the MacPorts/Homebrew command if
+something is missing), warns if the port is taken, writes
+`~/Library/LaunchAgents/com.llmchooser.plist` from
+[`deploy/com.llmchooser.plist`](deploy/com.llmchooser.plist) (an existing,
+differing plist is left alone; the new one goes next to it as `.new`) and
+loads it. By hand: copy the template, set the PHP path, `WorkingDirectory`,
+port and log paths, then
+`launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.llmchooser.plist`.
+Stop it with `launchctl bootout gui/$(id -u)/com.llmchooser`.
+
+- **`AbandonProcessGroup`** keeps running models alive when LlmChooser stops
+  or reloads (macOS has no `setsid`; started from a terminal with `php -S`,
+  Ctrl-C would stop the models too).
+- **Port 1234** is LM Studio's default as well; stop its server first.
+- **Memory.** Total RAM from `sysctl hw.memsize`; free memory from `vm_stat`
+  (free + inactive + speculative + purgeable); the GPU can use at most
+  `iogpu.wired_limit_mb` if set, else 75% of RAM (macOS's own default is a
+  little higher — 24.96 GiB of 32 GiB measured); GPU memory in use from
+  `ioreg`. With mmap, Metal uses the mapped model file directly (no copy), so
+  loaded weights appear as cached files in Activity Monitor, not app memory.
 
 ## 3. Option B — nginx + php-fpm
 

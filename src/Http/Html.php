@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace LlmChooser\Http;
 
-use LlmChooser\Model\NgramTable;
-use LlmChooser\Preset\Preset;
+use LlmChooser\Cli\Format;
+use LlmChooser\Memory\Allocation;
 
 final class Html
 {
@@ -105,17 +105,33 @@ final class Html
 			. '<input type="checkbox" name="' . self::e($name) . '" value="1"' . ($checked ? ' checked' : '') . $extra . '>';
 	}
 
-	public const LAZY_TITLE = 'Lazy loading: the n-gram table stays on disk, so real use is lower than this estimate';
+	public const MAPPED_TITLE = 'Memory-mapped: read from disk on demand and kept in page cache. '
+		. 'It does not have to fit (start is not refused); if it is larger than free RAM, the model streams from disk and runs slower.';
 
-	/** "*" after a memory estimate whose n-gram table loads lazily, else ''. */
-	public static function lazyMark(?Preset $p): string
+	/** "≈ 2.0 GiB read per token if uncached." — '' when nothing mapped is read per token. */
+	public static function readPerToken(Allocation $a): string
 	{
-		if ($p === null || $p->model_path === '') {
+		return $a->read_per_token > 0
+			? '≈ ' . Format::humanBytes($a->read_per_token) . ' read per token if uncached.'
+			: '';
+	}
+
+	public const STREAMS_TITLE = 'Mapped part is larger than free RAM: it will stream from disk, so the model runs slower.';
+
+	/**
+	 * " + 51.1 GB mapped" after a memory estimate, '' when nothing is mapped.
+	 * $streams adds a warning sign (mapped part larger than free RAM).
+	 *
+	 * @param callable(int):string $format Byte formatter used for the number next to it.
+	 */
+	public static function mapped(?Allocation $a, callable $format, string $unit = '', bool $streams = false): string
+	{
+		if ($a === null || $a->mappedBytes() === 0) {
 			return '';
 		}
-		$ngrams = NgramTable::forPath($p->model_path);
-		return $ngrams !== null && $ngrams->loadsLazily($p->args->lazy_mode, $p->args->load_mode)
-			? '<span class="lazy-mark" title="' . self::e(self::LAZY_TITLE) . '">*</span>'
-			: '';
+		$title = self::MAPPED_TITLE . ($a->read_per_token > 0 ? ' ' . self::readPerToken($a) : '');
+		return ' <span class="mapped" title="' . self::e($title) . '">+ '
+			. self::e($format($a->mappedBytes()) . $unit) . ' mapped</span>'
+			. ($streams ? ' <span class="streams" title="' . self::e(self::STREAMS_TITLE) . '">⚠</span>' : '');
 	}
 }

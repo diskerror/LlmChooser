@@ -12,8 +12,12 @@ final class GgufFixture
 	 * @param list<array{0:string,1:int,2:mixed}> $kv  [key, type, value]
 	 *        For R::T_ARRAY the value is [elementType, list<values>].
 	 * @param int $pad_bytes extra zero bytes appended (to give the file a size)
-	 * @param list<array{0:string,1:list<int>,2:int}> $tensors
-	 *        [name, dims, ggml_type] written as the tensor info section.
+	 * @param list<array{0:string,1:list<int>,2:int,3?:int}> $tensors
+	 *        [name, dims, ggml_type, bytes] written as the tensor info
+	 *        section. When any tensor has bytes, offsets are laid out in
+	 *        order and that much (zero) tensor data follows the header,
+	 *        aligned to 32; $pad_bytes then lands after the data (so it
+	 *        counts toward the last tensor). Without bytes all offsets are 0.
 	 */
 	public static function write(string $path, array $kv, int $tensor_count = 0, int $pad_bytes = 0, int $version = 3, array $tensors = []): void
 	{
@@ -25,12 +29,22 @@ final class GgufFixture
 		foreach ($kv as [$key, $type, $value]) {
 			$b .= self::str($key) . pack('V', $type) . self::value($type, $value);
 		}
-		foreach ($tensors as [$name, $dims, $type]) {
+		$offset = 0;
+		$sized  = false;
+		foreach ($tensors as $t) {
+			[$name, $dims, $type] = $t;
 			$b .= self::str($name) . pack('V', count($dims));
 			foreach ($dims as $d) {
 				$b .= pack('P', $d);
 			}
-			$b .= pack('V', $type) . pack('P', 0); // type (uint32 per spec), offset
+			$b .= pack('V', $type) . pack('P', isset($t[3]) ? $offset : 0); // type (uint32 per spec), offset
+			if (isset($t[3])) {
+				$offset += $t[3];
+				$sized = true;
+			}
+		}
+		if ($sized) {
+			$b .= str_repeat("\0", (32 - strlen($b) % 32) % 32) . str_repeat("\0", $offset);
 		}
 		$b .= str_repeat("\0", $pad_bytes);
 		file_put_contents($path, $b);

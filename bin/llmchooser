@@ -3,17 +3,17 @@
 
 declare(strict_types=1);
 
+if (PHP_VERSION_ID < 80200) {
+	fwrite(STDERR, 'llmchooser needs PHP >= 8.2 (this is ' . PHP_VERSION . ")\n");
+	exit(1);
+}
+
 require __DIR__ . '/../vendor/autoload.php';
 
 use LlmChooser\App;
 use LlmChooser\Cli\Cli;
 use LlmChooser\Cli\Output;
 use LlmChooser\Cli\StartupManager;
-
-if (PHP_VERSION_ID < 80100) {
-	fwrite(STDERR, 'llmchooser needs PHP >= 8.1 (this is ' . PHP_VERSION . ")\n");
-	exit(1);
-}
 
 // storage/ is private to the service user: new files 640, directories 750.
 umask(0027);

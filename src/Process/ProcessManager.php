@@ -338,7 +338,14 @@ final readonly class ProcessManager
 	 * memory. Matching on OUR binaries, not on the name "llama-server",
 	 * means an unrelated server someone else runs is never listed.
 	 *
-	 * @return list<array{pid:int,rss:int,port:string,model:string,args:string}>
+	 * 'adopt' is the preset this server can be adopted into, or null: the
+	 * preset named by its --alias (LlmChooser always passes the preset id
+	 * there), when that preset exists and has no live instance. 'differs'
+	 * is true when the process's command line is not what the preset builds
+	 * now (edited preset or engine, older LlmChooser): it then runs with
+	 * older settings until restarted.
+	 *
+	 * @return list<array{pid:int,rss:int,port:string,model:string,args:string,alias:string,adopt:?string,differs:bool}>
 	 */
 	public function orphans(): array
 	{
@@ -355,8 +362,12 @@ final readonly class ProcessManager
 		}
 
 		$managed = [];
-		foreach ($this->state->all() as $i) {
+		$live    = [];
+		foreach ($this->state->all() as $id => $i) {
 			$managed[$i->pid] = true;
+			if ($i->isLive()) {
+				$live[$id] = true;
+			}
 		}
 
 		$out = [];
@@ -369,9 +380,15 @@ final readonly class ProcessManager
 			if (!isset($binaries[$tokens[0] ?? '']) && !isset($binaries[$tokens[1] ?? ''])) {
 				continue;
 			}
+			$port  = preg_match('/--port\s+(\d+)/', $p['args'], $m) ? $m[1] : '?';
+			$alias = preg_match('/--alias\s+(\S+)/', $p['args'], $m) ? $m[1] : '';
+			[$adopt, $differs] = $this->adoptionCandidate($alias, $port, $p['args'], $live);
 			$out[] = $p + [
-				'port'  => preg_match('/--port\s+(\d+)/', $p['args'], $m) ? $m[1] : '?',
-				'model' => preg_match('/--model\s+(\S+)/', $p['args'], $m) ? basename($m[1]) : '?',
+				'port'    => $port,
+				'model'   => preg_match('/--model\s+(\S+)/', $p['args'], $m) ? basename($m[1]) : '?',
+				'alias'   => $alias,
+				'adopt'   => $adopt,
+				'differs' => $differs,
 			];
 		}
 		return $out;
@@ -398,6 +415,88 @@ final readonly class ProcessManager
 			$n++;
 		}
 		return $n;
+	}
+
+	/**
+	 * [preset id or null, command differs from what the preset builds now].
+	 *
+	 * @param array<string,true> $live preset ids with a live instance
+	 * @return array{0:?string,1:bool}
+	 */
+	private function adoptionCandidate(string $alias, string $port, string $args, array $live): array
+	{
+		if ($alias === '' || !ctype_digit($port) || isset($live[$alias])) {
+			return [null, false];
+		}
+		try {
+			$preset = $this->presets->load($alias);
+			$cmd    = $this->builder->build($preset, $this->engines->load($preset->engine_id), (int)$port);
+		} catch (\Throwable) {
+			return [null, false];
+		}
+		// ps shows argv joined by spaces (quoting lost); our args carry none.
+		return [$alias, implode(' ', $cmd->argv) !== $args];
+	}
+
+	/**
+	 * Take over an untracked server as the instance of the preset named by
+	 * its --alias (see orphans()). The list is recomputed here, so a PID
+	 * from a stale page is never adopted. A disabled preset is enabled: the
+	 * user evidently runs it.
+	 *
+	 * @throws RuntimeException when $pid is not an adoptable untracked server
+	 */
+	public function adopt(int $pid): Instance
+	{
+		$orphan = null;
+		foreach ($this->orphans() as $o) {
+			if ($o['pid'] === $pid) {
+				$orphan = $o;
+			}
+		}
+		if ($orphan === null) {
+			throw new RuntimeException("PID {$pid} is not an untracked server");
+		}
+		$id = $orphan['adopt'];
+		if ($id === null) {
+			throw new RuntimeException("PID {$pid} has no preset to adopt it into"
+				. ($orphan['alias'] !== '' ? " (alias '{$orphan['alias']}' is unknown or already running)" : ' (no --alias)'));
+		}
+
+		$preset = $this->presets->load($id);
+		if (!$preset->enabled) {
+			$this->presets->setEnabled($id, true);
+		}
+		try {
+			$allocation = $this->memory->estimate($preset)->toArray();
+		} catch (\Throwable) {
+			$allocation = [];
+		}
+		$host = preg_match('/--host\s+(\S+)/', $orphan['args'], $m) ? $m[1] : $this->engines->load($preset->engine_id)->host;
+		$log  = $this->proc->stdoutPath($pid);
+		$dir  = realpath($this->log_dir);
+		if ($log === null || $dir === false || !str_starts_with($log, $dir . '/')) {
+			$log = '';
+		}
+		$elapsed = $this->proc->elapsedSeconds($pid) ?? 0;
+
+		$this->state->update(static function ($c) use ($id, $pid, $host, $orphan, $log, $elapsed, $allocation): void {
+			$c[$id] = new Instance([
+				'preset_id'  => $id,
+				'pid'        => $pid,
+				'host'       => $host,
+				'port'       => (int)$orphan['port'],
+				'started_at' => time() - $elapsed,
+				'status'     => Instance::LOADING, // the next refresh() health check settles it
+				'message'    => $orphan['differs'] ? 'adopted; running with older settings — restart to apply the preset' : '',
+				'log_file'   => $log,
+				'command'    => $orphan['args'],
+				'allocation' => $allocation,
+				'last_used'  => time(),
+			]);
+		});
+
+		return $this->state->get($id);
 	}
 
 	/** @return InstanceCollection instances with status loading or ready */

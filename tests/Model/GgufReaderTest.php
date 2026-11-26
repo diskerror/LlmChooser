@@ -119,6 +119,43 @@ class GgufReaderTest extends TestCase
         $this->assertSame(192, $info->valueLength());
     }
 
+    public function test_tensor_bytes_from_data_offsets(): void
+    {
+        $p = $this->dir . '/t.gguf';
+        GgufFixture::write($p, [['general.architecture', GgufReader::T_STRING, 'llama']], 3, 10, 3, [
+            ['token_embd.weight', [4, 8], 0, 64],
+            ['blk.0.attn_q.weight', [4, 4], 1, 32],
+            ['output.weight', [4, 12], 0, 96],
+        ]);
+        $info = GgufReader::read($p);
+
+        $this->assertTrue($info->hasTensorBytes());
+        // the trailing pad lands in the last tensor (it runs to end of file)
+        $this->assertSame([64, 32, 106], array_column($info->tensors, 'bytes'));
+        $this->assertSame('blk.0.attn_q.weight', $info->tensors[1]['name']);
+    }
+
+    public function test_no_tensor_bytes_when_offsets_do_not_fit(): void
+    {
+        // all offsets 0 (fixture without sizes): two tensors at one offset
+        $p = $this->dir . '/zero.gguf';
+        GgufFixture::write($p, [], 2, 100, 3, [['a', [4], 0], ['b', [4], 0]]);
+        $info = GgufReader::read($p);
+        $this->assertFalse($info->hasTensorBytes());
+        $this->assertArrayNotHasKey('bytes', $info->tensors[0]);
+
+        // truncated data: the last tensor starts past the end
+        $q = $this->dir . '/cut.gguf';
+        GgufFixture::write($q, [], 2, 0, 3, [['a', [4], 0, 64], ['b', [4], 0, 96]]);
+        file_put_contents($q, substr((string)file_get_contents($q), 0, -100));
+        $this->assertFalse(GgufReader::read($q)->hasTensorBytes());
+
+        // no tensors at all
+        $r = $this->dir . '/none.gguf';
+        GgufFixture::model($r);
+        $this->assertFalse(GgufReader::read($r)->hasTensorBytes());
+    }
+
     public function test_rejects_non_gguf(): void
     {
         $p = $this->dir . '/nope.gguf';

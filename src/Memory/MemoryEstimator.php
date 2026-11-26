@@ -7,6 +7,7 @@ namespace LlmChooser\Memory;
 use LlmChooser\Model\GgufInfo;
 use LlmChooser\Model\GgufReader;
 use LlmChooser\Model\ModelFiles;
+use LlmChooser\Model\NgramTable;
 use LlmChooser\Preset\Preset;
 
 /**
@@ -17,8 +18,12 @@ use LlmChooser\Preset\Preset;
  *   shared by all slots in llama-server.
  * - Hybrid models (full_attention_interval, e.g. Qwen3-Next) only keep a
  *   KV cache on every N-th layer; only those layers are counted.
- * - Weights are the total on-disk size of all shards; we do not parse the
- *   tensor table. This is within a few MB of the tensor sum.
+ * - Weights come from the tensor table (sizes from data offsets, all
+ *   shards) and are placed per tensor by WeightPlacement: GPU and
+ *   repacked/non-mmap CPU tensors are resident, mmap'd CPU tensors and lazy
+ *   n-gram tables are "mapped" (page cache) and kept out of the resident
+ *   total. Without tensor sizes (old/odd headers) weights fall back to the
+ *   on-disk size of all shards, all resident.
  */
 final class MemoryEstimator
 {
@@ -56,9 +61,56 @@ final class MemoryEstimator
 	public function estimate(Preset $preset, GgufInfo $info, MemoryTopology $topology): Allocation
 	{
 		$breakdown = $this->breakdown($preset, $info);
-		$total     = array_sum($breakdown);
+		$placement = $this->placement($preset, $info, $topology->gpuIds() !== []);
 
-		return new Allocation($this->perDevice($preset, $info, $topology, $total), $breakdown);
+		$mapped = [];
+		$notes  = [];
+		if ($placement !== null) {
+			$breakdown['weights'] = $placement->gpu + $placement->cpu_resident;
+			if ($placement->ngrams > 0) {
+				$breakdown['ngrams'] = $placement->ngrams;
+			}
+			$mapped = array_filter(
+				['weights' => $placement->mapped, 'ngrams' => $placement->ngrams_mapped],
+				static fn(int $b): bool => $b > 0,
+			);
+			if ($placement->note !== null) {
+				$notes[] = $placement->note;
+			}
+		}
+
+		$total = array_sum($breakdown);
+		$fixed = $placement === null ? null : [$placement->gpu, $placement->cpu_resident + $placement->ngrams];
+
+		return new Allocation($this->perDevice($preset, $info, $topology, $total, $fixed), $breakdown, $mapped, $notes, $placement?->read_per_token ?? 0);
+	}
+
+	/**
+	 * Per-tensor weight placement, or null when the tensor sizes are not
+	 * known for every shard (then weights stay the all-resident file size).
+	 */
+	private function placement(Preset $preset, GgufInfo $info, bool $has_gpu): ?WeightPlacement
+	{
+		if (!$info->hasTensorBytes()) {
+			return null;
+		}
+		$tensors = $info->tensors;
+		$shards  = ModelFiles::shardPaths($preset->model_path);
+		if (count($shards) > 1) {
+			$tensors = [];
+			foreach ($shards as $path) {
+				try {
+					$shard = $path === $preset->model_path ? $info : GgufReader::read($path);
+				} catch (\Throwable) {
+					return null;
+				}
+				if (!$shard->hasTensorBytes()) {
+					return null;
+				}
+				array_push($tensors, ...$shard->tensors);
+			}
+		}
+		return WeightPlacement::of($tensors, $info->blockCount(), $preset, $has_gpu, NgramTable::of($preset->model_path, $info), $info->expertUsedCount(), $info->expertCount());
 	}
 
 	/**
@@ -179,18 +231,26 @@ final class MemoryEstimator
 	 * Which devices carry how many bytes. Unified aliasing happens in
 	 * AdmissionCheck, not here — this is the physical view.
 	 *
+	 * @param ?array{0:int,1:int} $fixed Resident weight bytes [gpu, cpu] from
+	 *        WeightPlacement, or null to split everything by layer fraction.
+	 *
 	 * @return array<string,int>
 	 */
-	private function perDevice(Preset $preset, GgufInfo $info, MemoryTopology $topology, int $total): array
+	private function perDevice(Preset $preset, GgufInfo $info, MemoryTopology $topology, int $total, ?array $fixed = null): array
 	{
-		$f = $this->gpuFraction($preset->args->n_gpu_layers, $info->blockCount());
+		$f = WeightPlacement::flags($preset->args->extra_flags)['dev_none']
+			? 0.0
+			: $this->gpuFraction($preset->args->n_gpu_layers, $info->blockCount());
 
 		$gpus = $topology->gpuIds();
 		if ($gpus === []) {
-			return ['cpu' => $total];
+			return $total > 0 ? ['cpu' => $total] : [];
 		}
 
-		$gpu_part = (int)round($total * $f);
+		// With per-tensor placement, resident weights go where the tensors
+		// are; the rest (KV, buffers, draft, mmproj) splits by layer fraction.
+		[$gpu_weights, $cpu_weights] = $fixed ?? [0, 0];
+		$gpu_part = $gpu_weights + (int)round(($total - $gpu_weights - $cpu_weights) * $f);
 		$cpu_part = $total - $gpu_part;
 
 		$per_device = $gpu_part > 0

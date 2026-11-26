@@ -317,6 +317,87 @@ class ProcessManagerTest extends TestCase
         $this->assertSame([], $signals);
     }
 
+    /** Process list for adoption tests: fixed elapsed time and stdout path. */
+    private function adoptProc(array $list, ?string $stdout = null): ProcessControl
+    {
+        return new class($list, $stdout) extends ProcessControl {
+            public function __construct(private array $list, private ?string $stdout) {}
+            public function listProcesses(): array { return $this->list; }
+            public function isAlive(int $pid): bool { return false; }
+            public function signal(int $pid, string $signal): void {}
+            public function elapsedSeconds(int $pid): ?int { return 120; }
+            public function stdoutPath(int $pid): ?string { return $this->stdout; }
+        };
+    }
+
+    /** What CommandBuilder makes for $id at $port, as ps shows it. */
+    private function argsFor(string $id, int $port): string
+    {
+        $p = $this->presets->load($id);
+        return implode(' ', (new \LlmChooser\Process\CommandBuilder())->build($p, $this->engines->load($p->engine_id), $port)->argv);
+    }
+
+    public function test_adopt_by_alias_writes_a_loading_row(): void
+    {
+        mkdir($this->dir . '/logs', 0775, true);
+        $log = $this->dir . '/logs/p1-x.log';
+        touch($log);
+        $pm = $this->managerWith($this->adoptProc([['pid' => 501, 'rss' => 1, 'args' => $this->argsFor('p1', 5851)]], realpath($log)));
+
+        $o = $pm->orphans();
+        $this->assertSame('p1', $o[0]['alias']);
+        $this->assertSame('p1', $o[0]['adopt']);
+        $this->assertFalse($o[0]['differs']);
+
+        $i = $pm->adopt(501);
+        $this->assertSame([501, 5851, Instance::LOADING, '', '127.0.0.1'], [$i->pid, $i->port, $i->status, $i->message, $i->host]);
+        $this->assertNotSame([], $i->allocation);
+        $this->assertEqualsWithDelta(time() - 120, $i->started_at, 2);
+        $this->assertSame(realpath($log), $i->log_file);
+        $this->assertSame($this->argsFor('p1', 5851), $i->command);
+        $this->assertSame([], $pm->orphans()); // tracked now
+    }
+
+    public function test_adopt_with_changed_settings_flags_them(): void
+    {
+        $pm = $this->managerWith($this->adoptProc([['pid' => 502, 'rss' => 1, 'args' => $this->argsFor('p1', 5852) . ' --temp 0.1']], '/var/log/elsewhere.log'));
+        $this->assertTrue($pm->orphans()[0]['differs']);
+        $i = $pm->adopt(502);
+        $this->assertStringContainsString('older settings', $i->message);
+        $this->assertSame('', $i->log_file); // outside storage/logs
+    }
+
+    public function test_adopt_enables_a_disabled_preset(): void
+    {
+        $this->presets->setEnabled('p1', false);
+        $pm = $this->managerWith($this->adoptProc([['pid' => 503, 'rss' => 1, 'args' => $this->argsFor('p1', 5853)]]));
+        $pm->adopt(503);
+        $this->assertTrue($this->presets->load('p1')->enabled);
+    }
+
+    public function test_no_adoption_without_a_free_known_preset(): void
+    {
+        $bin  = $this->engines->load('e')->binary_path_default;
+        $live = $this->argsFor('p1', 5854);
+        $pm   = $this->managerWith($this->adoptProc([
+            ['pid' => 504, 'rss' => 1, 'args' => "$bin --port 5855 --alias nope"],
+            ['pid' => 505, 'rss' => 1, 'args' => "$bin --port 5856"],
+            ['pid' => 506, 'rss' => 1, 'args' => $live],
+        ]));
+        $this->state->update(function ($c): void {
+            $c['p1'] = new Instance(['preset_id' => 'p1', 'pid' => 999, 'port' => 5857, 'status' => Instance::READY]);
+        });
+        $this->assertSame([null, null, null], array_column($pm->orphans(), 'adopt'));
+        foreach ([504, 505, 506, 777] as $pid) {
+            try {
+                $pm->adopt($pid);
+                $this->fail("adopted {$pid}");
+            } catch (RuntimeException) {
+            }
+        }
+        $this->assertSame(999, $this->state->get('p1')->pid); // untouched
+    }
+
     private function managerWith(ProcessControl $proc): ProcessManager
     {
         $g = 1024 ** 3;

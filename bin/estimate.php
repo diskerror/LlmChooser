@@ -6,13 +6,10 @@ declare(strict_types=1);
 // Prints the detected topology, the memory estimate, and the admission
 // verdict for starting that preset alongside nothing.
 //
-// Linux only: topology detection reads /proc and /sys. On the Mac this
-// throws "Cannot read memory info" — that is expected, run it on a Linux host.
+// Topology: Linux (/proc, /sys) or macOS (sysctl, vm_stat, ioreg).
 require __DIR__ . '/../vendor/autoload.php';
 
-use LlmChooser\Memory\LinuxTopologyProbe;
-use LlmChooser\Memory\MemoryService;
-use LlmChooser\Preset\PresetRepository;
+use LlmChooser\App;
 
 if (($argv[1] ?? '') === '') {
 	fwrite(STDERR, "usage: php84 bin/estimate.php <preset-id>\n");
@@ -20,8 +17,9 @@ if (($argv[1] ?? '') === '') {
 }
 
 $root   = dirname(__DIR__);
-$preset = (new PresetRepository($root . '/storage/presets'))->load($argv[1]);
-$svc    = new MemoryService(new LinuxTopologyProbe());
+$app    = new App($root);
+$preset = $app->presets->load($argv[1]);
+$svc    = $app->memory;
 
 echo json_encode([
 	'topology'   => $svc->topology()->toArray(),

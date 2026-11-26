@@ -6,6 +6,7 @@ namespace LlmChooser\Http;
 
 use LlmChooser\Cli\Format;
 use LlmChooser\Engine\EngineCollection;
+use LlmChooser\Memory\Allocation;
 use LlmChooser\Model\ChatTemplateFamily;
 use LlmChooser\Model\GgufReader;
 use LlmChooser\Model\ModelEntry;
@@ -28,7 +29,7 @@ final class PresetForm
 	 * @param list<ModelEntry> $models
 	 * @param array<string,string> $errors field ('args.x' for args) => message
 	 */
-	public static function render(Preset $p, array $models, bool $is_new, array $errors = [], bool $running = false, ?EngineCollection $engines = null, ?int $estimate_bytes = null, ?array $engine_help = null): string
+	public static function render(Preset $p, array $models, bool $is_new, array $errors = [], bool $running = false, ?EngineCollection $engines = null, ?Allocation $estimate = null, ?array $engine_help = null, bool $streams = false): string
 	{
 		$action = $is_new ? '/presets/new' : '/presets/' . Html::e($p->id) . '/edit';
 		$help   = FieldHints::load();
@@ -136,10 +137,13 @@ final class PresetForm
 		foreach ($groups as $label => $names) {
 			$suffix = '';
 			if ($label === 'Context & memory') {
-				// Running worst-case RAM for this preset (weights + full-ctx KV
-				// + overhead); app.js refreshes it as the form changes.
-				$suffix = ' — <span id="mem-estimate" data-url="/api/preset-estimate" data-lazy-title="' . Html::e(Html::LAZY_TITLE) . '">'
-					. ($estimate_bytes !== null ? Html::e(Format::gb($estimate_bytes)) . Html::lazyMark($p) . ' GB' : '?') . '</span> estimated';
+				// Running worst-case RAM for this preset (resident: weights + full-ctx
+				// KV + overhead; plus the memory-mapped part); app.js refreshes it
+				// as the form changes.
+				$suffix = ' — <span id="mem-estimate" data-url="/api/preset-estimate"'
+					. ' data-mapped-title="' . Html::e(Html::MAPPED_TITLE) . '" data-streams-title="' . Html::e(Html::STREAMS_TITLE) . '">'
+					. ($estimate !== null ? Html::e(Format::gb($estimate->totalBytes())) . ' GB' . Html::mapped($estimate, Format::gb(...), ' GB', $streams) : '?')
+					. '</span> estimated';
 			}
 			$out .= '<details><summary>' . Html::e($label) . $suffix . '</summary>';
 			foreach ($names as $name) {

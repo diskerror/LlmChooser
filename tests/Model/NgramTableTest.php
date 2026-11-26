@@ -63,7 +63,7 @@ final class NgramTableTest extends TestCase
 		file_put_contents($this->dir . '/shared/ngrams.gguf', str_repeat('x', 2048));
 		$fmt = static fn(int $b): string => $b . ' B';
 		$sep = NgramTable::of($this->dir . '/model/trunk.gguf', self::info('qwen4exp', [NgramTable::FILE_KEY => '../shared/ngrams.gguf']));
-		$this->assertSame(' (+2048 B)', $sep->estimateSuffix($fmt));
+		$this->assertSame(' + 2048 B mapped', $sep->estimateSuffix($fmt));
 		$this->assertSame('', NgramTable::of('/m/x.gguf', self::info('qwen4exp'))->estimateSuffix($fmt));
 		$missing = NgramTable::of($this->dir . '/model/trunk.gguf', self::info('qwen4exp', [NgramTable::FILE_KEY => 'nope.gguf']));
 		$this->assertSame('', $missing->estimateSuffix($fmt));
@@ -78,13 +78,13 @@ final class NgramTableTest extends TestCase
 		$this->assertSame(' + n-grams (missing)', $t->sizeSuffix(Format::gbNumber(...)));
 	}
 
-	public function test_loads_lazily_only_when_embedded_and_not_off(): void
+	public function test_mmap_off_load_modes(): void
 	{
-		$emb = NgramTable::of('/m/x.gguf', self::info('qwen4exp'));
-		$this->assertTrue($emb->loadsLazily('on'));
-		$this->assertTrue($emb->loadsLazily('auto'));
-		$this->assertFalse($emb->loadsLazily('off'));
-		$sep = NgramTable::of($this->dir . '/model/trunk.gguf', self::info('qwen4exp', [NgramTable::FILE_KEY => '../shared/ngrams.gguf']));
-		$this->assertFalse($sep->loadsLazily('on'));
+		foreach (['none', 'mlock', 'dio'] as $m) {
+			$this->assertTrue(NgramTable::mmapOff($m), $m);
+		}
+		foreach (['auto', 'mmap', 'mmap+mlock'] as $m) {
+			$this->assertFalse(NgramTable::mmapOff($m), $m);
+		}
 	}
 }

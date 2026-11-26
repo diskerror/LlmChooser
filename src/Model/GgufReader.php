@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace LlmChooser\Model;
 
 /**
- * Reads only the GGUF header and metadata key/values. Never reads weights.
+ * Reads only the GGUF header, metadata key/values and tensor table. Never
+ * reads weights.
  */
 final class GgufReader
 {
@@ -90,9 +91,9 @@ final class GgufReader
 			// Tensor info section (GGUF spec v2/v3): per tensor — name,
 			// n_dims (uint32), dims (n_dims x uint64), ggml type (uint32 —
 			// NOT uint16; gguf-py gguf_reader.py _get_tensor_info_field
-			// reads np.uint32), offset (uint64). We keep name/dims/type and
-			// stop; the data section is never touched.
+			// reads np.uint32), offset (uint64, relative to the data section).
 			$tensors = [];
+			$offsets = [];
 			for ($i = 0; $i < $tensor_count; ++$i) {
 				$name   = $this->str();
 				$n_dims  = $this->u32();
@@ -104,13 +105,59 @@ final class GgufReader
 					$dims[] = $this->u64();
 				}
 				$tensors[] = ['name' => $name, 'dims' => $dims, 'type' => $this->u32()];
-				$this->u64(); // offset within the data section — not needed
+				$offsets[] = $this->u64();
 			}
+
+			$this->addTensorBytes($tensors, $offsets, $meta);
 
 			return new GgufInfo($version, $tensor_count, $meta, $tensors);
 		}
 		finally {
 			fclose($fh);
+		}
+	}
+
+	/**
+	 * Sets 'bytes' on every tensor from the data offsets: sorted by offset,
+	 * a tensor's size is the gap to the next one (the last one runs to the
+	 * end of the file). Gaps include alignment padding (< alignment bytes),
+	 * and no quant-type size table is needed, so new types stay right. The
+	 * data section starts at the first multiple of general.alignment
+	 * (default 32) after the tensor table. Left unset when the offsets don't
+	 * fit the file (truncated or inconsistent): callers then fall back to
+	 * the file size. Every tensor has at least one element, so two tensors
+	 * at the same offset count as inconsistent too.
+	 *
+	 * @param list<array{name:string, dims:list<int>, type:int}> $tensors
+	 * @param list<int> $offsets
+	 * @param array<string, mixed> $meta
+	 */
+	private function addTensorBytes(array &$tensors, array $offsets, array $meta): void
+	{
+		if ($tensors === []) {
+			return;
+		}
+		$align = (int)($meta['general.alignment'] ?? 32);
+		if ($align <= 0) {
+			$align = 32;
+		}
+		$pos  = (int)ftell($this->fh);
+		$data = intdiv($pos + $align - 1, $align) * $align;
+		$size = (int)fstat($this->fh)['size'];
+		$len  = $size - $data;
+
+		$order = array_keys($offsets);
+		usort($order, static fn(int $a, int $b): int => $offsets[$a] <=> $offsets[$b]);
+		$sizes = [];
+		foreach ($order as $k => $i) {
+			$next = isset($order[$k + 1]) ? $offsets[$order[$k + 1]] : $len;
+			if ($offsets[$i] < 0 || $next <= $offsets[$i] || $next > $len) {
+				return;
+			}
+			$sizes[$i] = $next - $offsets[$i];
+		}
+		foreach ($sizes as $i => $b) {
+			$tensors[$i]['bytes'] = $b;
 		}
 	}
 

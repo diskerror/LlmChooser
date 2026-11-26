@@ -10,8 +10,9 @@ namespace LlmChooser\Model;
  * (--lazy-mode), so its bytes are on disk but mostly not resident. File sizes
  * therefore overstate RAM use (table inside the model file) or leave the
  * table out (table in a separate file, named by qwen4exp.ngram_file relative
- * to the model's folder). The estimate does not model this yet; the UI only
- * flags it.
+ * to the model's folder). MemoryEstimator (via WeightPlacement) counts the
+ * table as memory-mapped when it loads lazily and as resident otherwise;
+ * model sizes in the UI only flag it.
  */
 final readonly class NgramTable
 {
@@ -20,11 +21,11 @@ final readonly class NgramTable
 
 	/** Footnote for sizes marked with SIZE_MARK. */
 	public const EMBEDDED_NOTE = '* Includes the n-gram table, which llama.cpp memory-maps and reads on demand (--lazy-mode); '
-		. 'RAM in use will be well below this size, and the estimate overstates it.';
+		. 'RAM in use will be well below this size. Preset estimates count it as memory-mapped.';
 
 	/** Footnote for sizes with "+ … n-grams". */
 	public const SEPARATE_NOTE = '+ The n-gram table is a separate file, memory-mapped and read on demand (--lazy-mode); '
-		. 'it is not counted in the model size or the estimate.';
+		. 'it is not counted in the model size. Preset estimates count it as memory-mapped.';
 
 	public const SIZE_MARK = '*';
 
@@ -70,16 +71,15 @@ final readonly class NgramTable
 	}
 
 	/**
-	 * Text appended to an estimate: " (+95.4 GiB)" for a separate
-	 * table of known size, else "" (an embedded table is already inside
-	 * the estimate).
+	 * Text appended to a whole-file estimate: " + 95.4 GiB mapped" for a
+	 * separate table of known size (read lazily by default), else "".
 	 *
 	 * @param callable(int):string $format
 	 */
 	public function estimateSuffix(callable $format): string
 	{
 		return !$this->embedded && $this->file_bytes !== null
-			? ' (+' . $format($this->file_bytes) . ')'
+			? ' + ' . $format($this->file_bytes) . ' mapped'
 			: '';
 	}
 
@@ -97,18 +97,6 @@ final readonly class NgramTable
 		return $this->file_bytes !== null
 			? ' + ' . $format($this->file_bytes)
 			: ' + n-grams (missing)';
-	}
-
-	/**
-	 * True when llama-server will read this table on demand instead of
-	 * loading it: embedded, and lazy_mode not 'off' ('auto' is on for
-	 * tensors over 4 GiB, which every n-gram table we know of is) and the
-	 * load mode still memory-maps the file (lazy loading needs mmap). The
-	 * estimator still counts it as resident, so the estimate overstates.
-	 */
-	public function loadsLazily(string $lazy_mode, string $load_mode = 'auto'): bool
-	{
-		return $this->embedded && $lazy_mode !== 'off' && !self::mmapOff($load_mode);
 	}
 
 	/** --load-mode values that do not memory-map the model. */

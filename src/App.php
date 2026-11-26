@@ -7,6 +7,7 @@ namespace LlmChooser;
 use LlmChooser\Engine\EngineHelp;
 use LlmChooser\Engine\EngineRepository;
 use LlmChooser\Memory\LinuxTopologyProbe;
+use LlmChooser\Memory\MacTopologyProbe;
 use LlmChooser\Memory\MemoryService;
 use LlmChooser\Memory\TopologyProbe;
 use LlmChooser\Model\ModelScanner;
@@ -30,7 +31,7 @@ final readonly class App
 		$this->engines   = new EngineRepository($root . '/storage/engines');
 		$this->help      = new EngineHelp($root . '/storage/help', $root . '/docs/llama-server-help.txt');
 		$this->state     = new RuntimeState($root . '/storage/runtime_state.json');
-		$this->memory    = new MemoryService($probe ?? new LinuxTopologyProbe());
+		$this->memory    = new MemoryService($probe ?? (PHP_OS_FAMILY === 'Darwin' ? new MacTopologyProbe() : new LinuxTopologyProbe()));
 		$this->processes = new ProcessManager(
 			$this->presets, $this->engines, $this->state, $this->memory, $root . '/storage/logs'
 		);

@@ -64,6 +64,7 @@ final class WebApp
 		$rt->add('POST', '/presets/{id}/restart', fn(Request $r, array $p): Response => $this->start($r, $p['id'], 'restart'));
 		$rt->add('POST', '/presets/{id}/stop', fn(Request $r, array $p): Response => $this->stop($p['id']));
 		$rt->add('POST', '/orphans/kill', fn(Request $r): Response => $this->killOrphans($r));
+		$rt->add('POST', '/orphans/adopt', fn(Request $r): Response => $this->adoptOrphan($r));
 		$rt->add('POST', '/presets/{id}/estimate', fn(Request $r, array $p): Response => $this->estimate($r, $p['id']));
 		$rt->add('POST', '/presets/{id}/test', fn(Request $r, array $p): Response => $this->test($p['id']));
 		$rt->add('GET', '/presets/{id}/log', fn(Request $r, array $p): Response => $this->log($r, $p['id']));
@@ -243,7 +244,7 @@ final class WebApp
 			}
 		}
 
-		return Response::html($this->page($r, 'New preset', PresetForm::render($preset, $models, true, [], false, $this->app->engines->loadAll(), $this->presetEstimateBytes($preset), $this->presetHelpEntries($preset)), $r->query('msg')));
+		return Response::html($this->page($r, 'New preset', PresetForm::render($preset, $models, true, [], false, $this->app->engines->loadAll(), $this->presetEstimate($preset), $this->presetHelpEntries($preset), $this->presetStreams($preset)), $r->query('msg')));
 	}
 
 	/**
@@ -287,7 +288,7 @@ final class WebApp
 		$errors = PresetValidator::validate($preset, $this->app->engines, true, $this->app->presets);
 		if ($errors !== []) {
 			return Response::html(
-				$this->page($r, 'New preset', PresetForm::render($preset, $this->app->modelScanner()->scan(), true, $errors, false, $this->app->engines->loadAll(), $this->presetEstimateBytes($preset), $this->presetHelpEntries($preset))),
+				$this->page($r, 'New preset', PresetForm::render($preset, $this->app->modelScanner()->scan(), true, $errors, false, $this->app->engines->loadAll(), $this->presetEstimate($preset), $this->presetHelpEntries($preset), $this->presetStreams($preset))),
 				422
 			);
 		}
@@ -304,7 +305,7 @@ final class WebApp
 		}
 		$running = $this->instanceIsLive($id);
 		return Response::html(
-			$this->page($r, 'Edit ' . $id, PresetForm::render($preset, $this->app->modelScanner()->scan(), false, [], $running, $this->app->engines->loadAll(), $this->presetEstimateBytes($preset), $this->presetHelpEntries($preset)), $r->query('msg'))
+			$this->page($r, 'Edit ' . $id, PresetForm::render($preset, $this->app->modelScanner()->scan(), false, [], $running, $this->app->engines->loadAll(), $this->presetEstimate($preset), $this->presetHelpEntries($preset), $this->presetStreams($preset)), $r->query('msg'))
 		);
 	}
 
@@ -328,7 +329,7 @@ final class WebApp
 		$errors = PresetValidator::validate($preset, $this->app->engines, false, $this->app->presets);
 		if ($errors !== []) {
 			return Response::html(
-				$this->page($r, 'Edit ' . $id, PresetForm::render($preset, $this->app->modelScanner()->scan(), false, $errors, $this->instanceIsLive($id), $this->app->engines->loadAll(), $this->presetEstimateBytes($preset), $this->presetHelpEntries($preset))),
+				$this->page($r, 'Edit ' . $id, PresetForm::render($preset, $this->app->modelScanner()->scan(), false, $errors, $this->instanceIsLive($id), $this->app->engines->loadAll(), $this->presetEstimate($preset), $this->presetHelpEntries($preset), $this->presetStreams($preset))),
 				422
 			);
 		}
@@ -369,10 +370,10 @@ final class WebApp
 		try {
 			if ($op === 'start' && !$force) {
 				$evicted = $this->app->processes->startEvicting($id);
-				return Response::redirect('/', 'Starting ' . $id . ($evicted !== [] ? ' (unloaded ' . implode(', ', $evicted) . ')' : ''));
+				return Response::redirect('/', 'Starting ' . $id . ($evicted !== [] ? ' (unloaded ' . implode(', ', $evicted) . ')' : '') . $this->streamsWarning($id));
 			}
 			$this->app->processes->{$op}($id, force: $force);
-			return Response::redirect('/', ucfirst($op) . 'ing ' . $id);
+			return Response::redirect('/', ucfirst($op) . 'ing ' . $id . $this->streamsWarning($id));
 		} catch (AdmissionException $e) {
 			$body = '<pre>' . Html::e($e->getMessage()) . '</pre>'
 				. '<form method="post" action="/presets/' . Html::e($id) . '/' . Html::e($op) . '">'
@@ -380,6 +381,16 @@ final class WebApp
 				. '<button type="submit" class="danger">Start anyway</button></form>';
 			return Response::html($this->page($r, 'Not enough memory', $body), 200);
 		}
+	}
+
+	/** Flash suffix when the started instance's mapped part won't fit in free RAM, else ''. */
+	private function streamsWarning(string $id): string
+	{
+		$i = $this->app->state->get($id);
+		if ($i === null || $i->allocation === []) {
+			return '';
+		}
+		return $this->app->memory->streams(Allocation::fromArray($i->allocation)) ? ' — ⚠ ' . Html::STREAMS_TITLE : '';
 	}
 
 	/**
@@ -398,14 +409,31 @@ final class WebApp
 				. '<td>' . Html::e($o['port']) . '</td>'
 				. '<td>' . Html::e($o['model']) . '</td>'
 				. '<td class="num">' . Html::e(Format::gb((int)$o['rss'])) . '</td>'
-				. '<td>' . Html::postButton('/orphans/kill?pid=' . $o['pid'], 'Kill') . '</td></tr>';
+				. '<td>' . Html::e($o['alias'] !== '' ? $o['alias'] : '-') . '</td>'
+				. '<td class="actions">' . Html::postButton('/orphans/kill?pid=' . $o['pid'], 'Kill')
+				. ($o['adopt'] !== null
+					? Html::postButton('/orphans/adopt?pid=' . $o['pid'], 'Adopt')
+						. ($o['differs'] ? ' <span class="note">settings differ from the preset</span>' : '')
+					: '')
+				. '</td></tr>';
 		}
 		return '<section><h2>Untracked servers</h2>'
 			. '<p>These llama-server processes are running but LlmChooser has lost track of them. '
-			. 'They still hold memory (RSS here excludes GPU-held model memory).</p>'
-			. '<table><tr><th class="num">PID</th><th>Port</th><th>Model</th><th class="num">RSS (GB)</th><th>Actions</th></tr>' . $rows . '</table>'
+			. 'They still hold memory (RSS here excludes GPU-held model memory). '
+			. 'Adopt takes one over as the instance of the preset named by its --alias.</p>'
+			. '<table><tr><th class="num">PID</th><th>Port</th><th>Model</th><th class="num">RSS (GB)</th><th>Preset</th><th>Actions</th></tr>' . $rows . '</table>'
 			. Html::postButton('/orphans/kill', 'Kill all untracked', 'danger', 'Kill all untracked llama-server processes?')
 			. '</section>';
+	}
+
+	private function adoptOrphan(Request $r): Response
+	{
+		try {
+			$i = $this->app->processes->adopt((int)$r->query('pid'));
+		} catch (\RuntimeException $e) {
+			return Response::redirect('/', $e->getMessage());
+		}
+		return Response::redirect('/', 'Adopted ' . $i->preset_id . ' (pid ' . $i->pid . ')');
 	}
 
 	private function killOrphans(Request $r): Response
@@ -441,12 +469,21 @@ final class WebApp
 		foreach ($alloc->per_device as $d => $b) {
 			$devs .= '<tr><td>' . Html::e($d) . '</td><td>' . Html::e(Format::humanBytes($b)) . '</td></tr>';
 		}
-		$ngrams = NgramTable::forPath($preset->model_path);
+		$mapped = '';
+		foreach ($alloc->mapped as $k => $v) {
+			$mapped .= '<tr><td>' . Html::e($k) . '</td><td>' . Html::e(Format::humanBytes((int)$v)) . '</td></tr>';
+		}
+		$streams = $this->app->memory->streams($alloc);
 		$body = '<table><tr><th>Part</th><th>Bytes</th></tr>' . $rows
-			. '<tr><th>Total</th><th>' . Html::e(Format::humanBytes($alloc->totalBytes())) . Html::lazyMark($preset)
-				. Html::e($ngrams?->estimateSuffix(Format::humanBytes(...)) ?? '') . '</th></tr></table>'
-			. (Html::lazyMark($preset) !== '' ? '<p class="note">* ' . Html::e(Html::LAZY_TITLE) . '.</p>' : '')
-			. ($ngrams !== null ? '<p class="note">' . Html::e(ltrim($ngrams->note(), '*+ ')) . '</p>' : '')
+			. '<tr><th>Total</th><th>' . Html::e(Format::humanBytes($alloc->totalBytes())) . '</th></tr></table>'
+			. ($mapped !== ''
+				? '<h2>Memory-mapped</h2><table><tr><th>Part</th><th>Bytes</th></tr>' . $mapped
+					. '<tr><th>Total</th><th>' . Html::e(Format::humanBytes($alloc->mappedBytes())) . '</th></tr></table>'
+					. '<p class="note">' . Html::e(Html::MAPPED_TITLE) . '</p>'
+					. ($alloc->read_per_token > 0 ? '<p class="note">' . Html::e(Html::readPerToken($alloc)) . '</p>' : '')
+					. ($streams ? '<p class="note">⚠ ' . Html::e(Html::STREAMS_TITLE) . '</p>' : '')
+				: '')
+			. implode('', array_map(static fn(string $n): string => '<p class="note">' . Html::e($n) . '</p>', $alloc->notes))
 			. '<h2>Per device</h2><table><tr><th>Device</th><th>Bytes</th></tr>' . $devs . '</table>';
 		return Response::html($this->page($r, 'Estimate ' . $id, $body));
 	}
@@ -918,14 +955,28 @@ final class WebApp
 		}
 	}
 
+	/** True when the preset's mapped part would stream from disk (see MemoryService::streams). */
+	private function presetStreams(Preset $p): bool
+	{
+		$alloc = $this->presetEstimate($p);
+		return $alloc !== null && $this->app->memory->streams($alloc);
+	}
+
+	/** @var array<int, ?Allocation> presetEstimate() results by preset object, for one request. */
+	private array $estimates = [];
+
 	/** Worst-case RAM for a preset as currently posted by the form (not saved). */
-	private function presetEstimateBytes(Preset $p): ?int
+	private function presetEstimate(Preset $p): ?Allocation
 	{
 		if ($p->model_path === '') {
 			return null;
 		}
+		$key = spl_object_id($p);
+		if (array_key_exists($key, $this->estimates)) {
+			return $this->estimates[$key];
+		}
 		try {
-			return $this->app->memory->estimate($p)->totalBytes();
+			return $this->estimates[$key] = $this->app->memory->estimate($p);
 		} catch (Throwable) {
 			return null;
 		}
@@ -934,14 +985,17 @@ final class WebApp
 	private function apiPresetEstimate(Request $r): Response
 	{
 		try {
-			$posted = new Preset(PresetForm::fromPost($r->post));
-			$bytes  = $this->presetEstimateBytes($posted);
-			$lazy   = Html::lazyMark($posted) !== '';
+			$alloc = $this->presetEstimate(new Preset(PresetForm::fromPost($r->post)));
 		} catch (Throwable) {
-			$bytes = null;
-			$lazy  = false;
+			$alloc = null;
 		}
-		return Response::json(['gb' => $bytes === null ? null : Format::gb($bytes), 'lazy' => $lazy]);
+		$mapped = $alloc?->mappedBytes() ?? 0;
+		return Response::json([
+			'gb'      => $alloc === null ? null : Format::gb($alloc->totalBytes()),
+			'mapped'  => $mapped > 0 ? Format::gb($mapped) : null,
+			'streams' => $alloc !== null && $this->app->memory->streams($alloc),
+			'read'    => $alloc !== null && $alloc->read_per_token > 0 ? Html::readPerToken($alloc) : null,
+		]);
 	}
 
 	private function apiDashboardPanels(): Response
@@ -1081,8 +1135,7 @@ final class WebApp
 				. '<td>' . $this->statusCell($i) . '</td>'
 				. '<td class="num">' . Html::e((string)($i->port ?: '-')) . '</td>'
 				. '<td class="num">' . $this->ctxCell($p) . '</td>'
-				. '<td class="num">' . ($alloc !== null ? Html::e(Format::gb($alloc->totalBytes())) . Html::lazyMark($p)
-					. Html::e($p !== null ? NgramTable::forPath($p->model_path)?->estimateSuffix(Format::gb(...)) ?? '' : '') : '-') . '</td>'
+				. '<td class="num">' . ($alloc !== null ? Html::e(Format::gb($alloc->totalBytes())) . Html::mapped($alloc, Format::gb(...)) : '-') . '</td>'
 				. '<td>' . ($i->started_at > 0 ? Html::e(Format::duration(time() - $i->started_at)) : '-') . '</td>'
 				. '<td>' . ($i->last_used > 0 ? Html::e(Format::duration(time() - $i->last_used)) . ' ago' : '-') . '</td>'
 				. '<td class="actions">' . $acts . '</td></tr>';
@@ -1127,8 +1180,8 @@ final class WebApp
 			return '-';
 		}
 		try {
-			return Html::e(Format::gb($this->app->memory->estimate($p)->totalBytes())) . Html::lazyMark($p)
-				. Html::e(NgramTable::forPath($p->model_path)?->estimateSuffix(Format::gb(...)) ?? '');
+			$alloc = $this->app->memory->estimate($p);
+			return Html::e(Format::gb($alloc->totalBytes())) . Html::mapped($alloc, Format::gb(...), '', $this->app->memory->streams($alloc));
 		} catch (Throwable) {
 			return '?';
 		}

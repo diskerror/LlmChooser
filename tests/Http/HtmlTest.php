@@ -5,8 +5,7 @@ declare(strict_types=1);
 namespace LlmChooser\Tests\Http;
 
 use LlmChooser\Http\Html;
-use LlmChooser\Preset\Preset;
-use LlmChooser\Tests\Model\GgufFixture;
+use LlmChooser\Memory\Allocation;
 use PHPUnit\Framework\TestCase;
 
 class HtmlTest extends TestCase
@@ -33,27 +32,20 @@ class HtmlTest extends TestCase
 		);
 	}
 
-	public function test_lazy_mark_follows_model_and_lazy_mode(): void
+	public function test_mapped_suffix_only_when_something_is_mapped(): void
 	{
-		$dir = sys_get_temp_dir() . '/llmchooser-html-' . uniqid('', true);
-		mkdir($dir);
-		try {
-			GgufFixture::model($dir . '/ng.gguf', 'qwen4exp');
-			GgufFixture::model($dir . '/plain.gguf', 'llama');
-			$mk = static fn(string $m, string $mode): Preset => new Preset(['id' => 'p', 'model_path' => $dir . '/' . $m, 'args' => ['lazy_mode' => $mode]]);
+		$fmt = static fn(int $b): string => (string)$b;
+		$this->assertSame('', Html::mapped(null, $fmt));
+		$this->assertSame('', Html::mapped(new Allocation(['cpu' => 5], ['weights' => 5]), $fmt));
 
-			$this->assertStringContainsString('>*</span>', Html::lazyMark($mk('ng.gguf', 'auto')));
-			$this->assertStringContainsString('>*</span>', Html::lazyMark($mk('ng.gguf', 'on')));
-			$this->assertSame('', Html::lazyMark($mk('ng.gguf', 'off')));
-			$this->assertSame('', Html::lazyMark($mk('plain.gguf', 'on')));
-			$this->assertSame('', Html::lazyMark(null));
-			$no_mmap = new Preset(['id' => 'p', 'model_path' => $dir . '/ng.gguf', 'args' => ['load_mode' => 'none']]);
-			$this->assertSame('', Html::lazyMark($no_mmap));
-			$mapped = new Preset(['id' => 'p', 'model_path' => $dir . '/ng.gguf', 'args' => ['load_mode' => 'mmap+mlock']]);
-			$this->assertStringContainsString('>*</span>', Html::lazyMark($mapped));
-		}
-		finally {
-			exec('rm -rf ' . escapeshellarg($dir));
-		}
+		$a    = new Allocation(['cpu' => 5], ['weights' => 5], ['weights' => 3, 'ngrams' => 4]);
+		$html = Html::mapped($a, $fmt, ' GB');
+		$this->assertStringContainsString('>+ 7 GB mapped</span>', $html);
+		$this->assertStringContainsString('class="mapped"', $html);
+		$this->assertStringNotContainsString('⚠', $html);
+		$this->assertStringContainsString('⚠', Html::mapped($a, $fmt, '', true));
+		$this->assertStringNotContainsString('per token', $html);
+		$r = new Allocation(['cpu' => 5], ['weights' => 5], ['weights' => 3], [], 2 * 1024 ** 3);
+		$this->assertStringContainsString('≈ 2.0 GiB read per token if uncached.', Html::mapped($r, $fmt));
 	}
 }
